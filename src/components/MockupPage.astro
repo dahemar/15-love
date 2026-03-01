@@ -1,0 +1,126 @@
+---
+import type { Hotspot } from "../data/mockups";
+
+type Props = {
+  image: string;
+  width: number;
+  height: number;
+  hotspots?: Hotspot[];
+};
+
+const { image, width, height, hotspots = [] } = Astro.props;
+---
+
+<main class="mockup-root" data-mockup-root>
+  <div class="mockup-viewport" data-mockup-viewport>
+    <div class="mockup-stage" data-mockup-stage>
+      <div
+        class="mockup-canvas"
+        data-mockup-canvas
+        data-w={width}
+        data-h={height}
+        style={`width:${width}px;height:${height}px`}
+      >
+        <img class="mockup-image" src={image} alt="" draggable="false" />
+        {hotspots.map((hs) => {
+          const [x0, y0, x1, y1] = hs.bbox;
+          const style = `left:${x0}px;top:${y0}px;width:${x1 - x0}px;height:${y1 - y0}px;`;
+          const external = hs.target === "_blank";
+          return (
+            <a
+              class="mockup-hotspot"
+              href={hs.href}
+              style={style}
+              aria-label={hs.label}
+              target={hs.target}
+              rel={external ? "noreferrer" : undefined}
+            />
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</main>
+
+<script is:inline>
+  (() => {
+    const root = document.currentScript?.previousElementSibling;
+    if (!root || !(root instanceof HTMLElement)) return;
+    const viewport = root.querySelector('[data-mockup-viewport]');
+    const stage = root.querySelector('[data-mockup-stage]');
+    const canvas = root.querySelector('[data-mockup-canvas]');
+    if (!(viewport instanceof HTMLElement) || !(stage instanceof HTMLElement) || !(canvas instanceof HTMLElement)) return;
+
+    const w = Number(canvas.dataset.w || '0');
+    const h = Number(canvas.dataset.h || '0');
+    if (!w || !h) return;
+
+    canvas.style.transformOrigin = 'top left';
+
+    let raf = 0;
+    let lastScale = -1;
+
+    const measureAndApply = () => {
+      raf = 0;
+      const vw = viewport.clientWidth;
+      const vh = viewport.clientHeight;
+      const scale = Math.min(vw / w, vh / h);
+
+      if (scale === lastScale) return;
+      lastScale = scale;
+
+      stage.style.width = `${w * scale}px`;
+      stage.style.height = `${h * scale}px`;
+      canvas.style.transform = `scale(${scale})`;
+    };
+
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(measureAndApply);
+    };
+
+    const ro = new ResizeObserver(schedule);
+    ro.observe(viewport);
+    schedule();
+  })();
+</script>
+
+<style>
+  .mockup-root {
+    width: 100vw;
+    height: 100vh;
+    background: var(--page-bg);
+  }
+  .mockup-viewport {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .mockup-stage {
+    position: relative;
+  }
+  .mockup-canvas {
+    position: relative;
+    will-change: transform;
+  }
+  .mockup-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    user-select: none;
+    pointer-events: none;
+  }
+  .mockup-hotspot {
+    position: absolute;
+    display: block;
+    background: transparent;
+  }
+  .mockup-hotspot:focus-visible {
+    outline: 2px solid #0000ff;
+    outline-offset: 2px;
+  }
+</style>

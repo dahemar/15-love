@@ -1,0 +1,70 @@
+{
+  "newsList": [
+    "SLIM0 working on the dubplate\nof FORGIVENESS at KDS.",
+    "CTM & Skjold Rambow per-\nform \"Bow\" at Berlin Atonal ‘23.",
+    "ML Buch on US tour.",
+    "Music video for \"Sedimentary\"\nout today!",
+    "Making merch for Suntub.",
+    "Vind for Dior at PFW ‘24.",
+    "Jordan Playfair’s album release\nconcert!",
+    "Suntub vinyl press! Get yours\nfresh!",
+    "\"Drama\" from the forthcoming\nCTM album \"Vind\" is out today!"
+  ],
+  "newsCards": [
+    {
+      "id": "n1-n2",
+      "images": [
+        { "src": "/assets/image-mockup1.png", "alt": "Studio session" },
+        { "src": "/assets/FTL005_artwork_casette_export.jpg", "alt": "Jordan Playfair release artwork" }
+      ]
+    },
+    {
+      "id": "n3-n4",
+      "images": [
+        { "src": "/assets/IMG_0271.JPG", "alt": "Suntub process" },
+        { "src": "/assets/FTL003 process 4.png", "alt": "Process image 4" }
+      ]
+    },
+    {
+      "id": "n5-n6",
+      "images": [
+        { "src": "/assets/FTL003 process 5.png", "alt": "Process image 5" },
+        { "src": "/assets/FTL003 process 7.png", "alt": "Process image 7" }
+      ]
+    }
+  ],
+  "newsFlowText": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+  "releaseList": [
+    "The Shadow Channel -\nSpellcaster",
+    "Desire -\nTLF Trio",
+    "It’s Looking at You -\nJura",
+    "Affectionately -\nSuntub",
+    "Pink Must -\nML Buch"
+  ],
+  "releaseCards": [
+    {
+      "id": "r1",
+      "image": { "src": "/assets/FTL010_Album_DSP copy.jpg", "alt": "The Shadow Channel cover" },
+      "credits": [
+        { "label": "Artist name:", "value": "Spellcaster" },
+        { "label": "Album title:", "value": "The Shadow Channel" },
+        { "label": "Catalogue number:", "value": "FTL010" },
+        { "label": "Release date:", "value": "31 October 2025" },
+        { "label": "Format:", "value": "Digital/CD" }
+      ],
+      "body": "Ellaborent prat. Parume sedipsus aut ullest, commolu pictem harisquatus delent, opta cum fuga."
+    },
+    {
+      "id": "r2",
+      "image": { "src": "/assets/new_crop.jpg", "alt": "Desire cover" },
+      "credits": [
+        { "label": "Artist name:", "value": "TLF Trio" },
+        { "label": "Album title:", "value": "Desire" },
+        { "label": "Catalogue number:", "value": "FTL009" },
+        { "label": "Release date:", "value": "2025" },
+        { "label": "Format:", "value": "Digital/CD" }
+      ],
+      "body": "Ellaborent prat. Rehenis mi, od quatur repuda volore et voluptati untiorum."
+    }
+  ]
+}

@@ -1,0 +1,235 @@
+---
+import TennisButton from "./TennisButton.astro";
+
+type Post =
+  | {
+      id: string;
+      kind: "text";
+      title?: string;
+      body: string;
+    }
+  | {
+      id: string;
+      kind: "image-left";
+      body?: string;
+      imageSrc: string;
+      imageAlt: string;
+      credits?: Array<{ label: string; value: string }>;
+    }
+  | {
+      id: string;
+      kind: "gallery";
+      body: string;
+      images: Array<{ src: string; alt: string }>;
+    };
+
+const posts: Post[] = [
+  {
+    id: "p1",
+    kind: "image-left",
+    imageSrc: "/assets/image-mockup1.png",
+    imageAlt: "Photo",
+    body: `SLIM0 working on the dubplate of FORGIVENESS at KDS.
+Con cum qui doluptatur sendite mporum quisti commolendae is vendes sim dolorror apiet remquo tem ab
+ipsum aut lic tectumque in ni invendae necae parundit maximus, intiur? Ur? Ignis antiore pudantium volor-
+poreped moluptas dempossint doluptat.
+Resciis ex escim et opta sed entio velles et laut lanimint voloris cipsum dolorestrum quas escim ut ut volo-
+ria dolescit volorunt volorepernam quidelitas ipitam es as et rem quiae susam debis et imusciis ...`,
+  },
+  {
+    id: "p2",
+    kind: "image-left",
+    imageSrc: "/assets/FTL005_artwork_casette_export.jpg",
+    imageAlt: "Album cover",
+    credits: [
+      { label: "Artist name:", value: "Jordan Playfair" },
+      { label: "Album title:", value: "Something Inside So Wrong" },
+      { label: "Catalogue number:", value: "FTL004" },
+      { label: "Release date:", value: "26 March 2024" },
+      { label: "Format:", value: "Digital" },
+    ],
+    body: `Feres es dempora tibusciti diam fugitat. Fuga. Et voluptasi berspel laboratibus pos ut
+voluptaquo beatiae ex etur, ulpa int, officil magnissunt elia conet velique nonserferum
+faccus aut volest omnis ut que eaque lab ipsapel molupis venissunt, ilitem ad que
+aped exceatecto dolore dolupta tectatiur? Ut hiliam fugia pra cus dolum re ne eaquo
+explacculpa sitibus, cum, sequo doluptaqui blantis pelecta tempel in paruntior ...`,
+  },
+  {
+    id: "p3",
+    kind: "image-left",
+    imageSrc: "/assets/IMG_0271.JPG",
+    imageAlt: "Photo",
+    body: `‘Suntub’ FTL003 recording
+process Ad molore etur repe
+dolupta temquam et omnis
+vent que porepta turepti offic-
+ipita volestem sam ra aut lita-
+tio dent quatem rerepro vid-
+ipsunt dolo cum qui cone`,
+  },
+  {
+    id: "p4",
+    kind: "gallery",
+    body: "‘Suntub’ FTL003 recording process…",
+    images: [
+      { src: "/assets/FTL003 process 4.png", alt: "Process image 4" },
+      { src: "/assets/FTL003 process 5.png", alt: "Process image 5" },
+      { src: "/assets/FTL003 process 7.png", alt: "Process image 7" },
+    ],
+  },
+  {
+    id: "p5",
+    kind: "text",
+    body: "Resciis ex escim et opta sed entio velles et laut lanimint voloris…",
+  },
+];
+---
+
+<div class="feed" aria-label="Posts">
+  {posts.map((p, i) => (
+    <article class={"card kind-" + p.kind} id={p.id}>
+      <div class="content">
+        {p.kind === "text" ? <p class="body">{p.body}</p> : null}
+
+        {p.kind === "image-left" ? (
+          <>
+            <img
+              class="media"
+              src={p.imageSrc}
+              alt={p.imageAlt}
+              width="180"
+              height="180"
+              loading={i === 0 ? "eager" : "lazy"}
+              decoding="async"
+              fetchpriority={i === 0 ? "high" : undefined}
+            />
+            {p.credits ? (
+              <div class="credits" aria-label="Credits">
+                {p.credits.map((c) => (
+                  <div class="creditLine">
+                    <span class="creditLabel">{c.label}</span> <span class="creditValue">{c.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : p.body ? (
+              <p class="body">{p.body}</p>
+            ) : null}
+          </>
+        ) : null}
+
+        {p.kind === "gallery" ? (
+          <>
+            <div class="gallery">
+              {p.images.map((img) => (
+                <img class="thumb" src={img.src} alt={img.alt} loading="lazy" decoding="async" width="180" height="180" />
+              ))}
+            </div>
+            <p class="body">{p.body}</p>
+          </>
+        ) : null}
+      </div>
+      <TennisButton class="card-tennis" href={`#${p.id}`} label="Jump to this post" />
+    </article>
+  ))}
+</div>
+
+<style>
+  .feed {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+  }
+
+  .card {
+    position: relative;
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid #000;
+    border-bottom: none;
+    padding: 14px;
+    padding-right: 52px;
+    padding-bottom: 48px;
+    display: block;
+    background: #fff;
+    content-visibility: auto;
+    contain-intrinsic-size: 260px;
+  }
+
+  .card:first-child {
+    border-top: none;
+  }
+
+  .content {
+    min-width: 0;
+  }
+
+  .body {
+    margin: 0;
+    font-size: 15.4px; /* +10% */
+    line-height: 1.25;
+    white-space: pre-line;
+  }
+
+  .card-tennis,
+  .card .tennis {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .kind-image-left .content,
+  .kind-image-right .content {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .kind-image-right .content {
+    grid-template-columns: 1fr 180px;
+  }
+
+  /* For gallery posts: thumbnails in left column, text on the right */
+  .kind-gallery .content {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .media {
+    width: 180px;
+    height: 180px;
+    object-fit: cover;
+    border: 1px solid #000;
+  }
+
+  .credits {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 15.4px; /* +10% */
+    line-height: 1.25;
+  }
+
+  .creditLabel {
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: 0.2px;
+  }
+
+  .gallery {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 0;
+  }
+
+  .thumb {
+    width: 180px;
+    height: 180px;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+  }
+</style>

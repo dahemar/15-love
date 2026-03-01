@@ -1,0 +1,78 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SiteShell from "../components/SiteShell.astro";
+import TennisButton from "../components/TennisButton.astro";
+import PostFeed from "../components/PostFeed.astro";
+---
+
+<BaseLayout title="15 love — Home">
+  <SiteShell activeTab="home">
+    <div slot="left" class="colblock colblock-left">
+      <section class="block block-news">
+        <div class="blockhead">
+          <h2 class="coltitle">news</h2>
+        </div>
+        <ul class="list">
+          <li class="li"><span class="heart">♡</span><span class="text">SLIM0 working on the dubplate of FORGIVENESS at KDS.</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">CTM & Skjold Rambow perform “Bow” at Berlin Atonal ‘23.</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">ML Buch on US tour.</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Music video for “Sedimentary” out today!</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Making merch for Suntub.</span></li>
+        </ul>
+        <TennisButton class="block-tennis" href="/news" label="Go to news" />
+      </section>
+
+      <section class="block block-events">
+        <div class="blockhead">
+          <h2 class="coltitle">events</h2>
+        </div>
+        <ul class="list">
+          <li class="li"><span class="heart">♡</span><span class="text">SLIM0 release party @Mayhem</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Jordan Playfair - Spresso<br/><span class="venue">@ Loki Brixton</span></span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Astrid Sonne - Tara Clerkin Trio<br/><span class="venue">@ CPH Distillery</span></span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">CTM x Frederik Worm - CTM<br/><span class="venue">@ Lille Vega</span></span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Mere lyd for Palæstina<br/><span class="venue">@ CPH Distillery</span></span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Vind & 15 love release party<br/><span class="venue">@ Mayhem</span></span></li>
+        </ul>
+        <TennisButton class="block-tennis" href="/events" label="Go to events" />
+      </section>
+    </div>
+
+    <div slot="center" class="center">
+      <PostFeed />
+    </div>
+
+    <div slot="right" class="colblock colblock-right">
+      <section class="block block-releases">
+        <div class="blockhead">
+          <h2 class="coltitle">releases</h2>
+        </div>
+        <ul class="list">
+          <li class="li"><span class="heart">♡</span><span class="text">The Shadow Channel - Spellcaster (2025)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Desire - TLF Trio (2025)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">The Hat Comes Off - Jura (2025)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Affectionately - Raisa K (2025)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Pink Must - Pink Must (2025)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Something Inside So Wrong - Jordan Playfair (2024)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">FORGIVENESS - SLIM0 (2024)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Suntub - ML Buch (2023)</span></li>
+          <li class="li"><span class="heart">♡</span><span class="text">Vind - CTM (2023)</span></li>
+        </ul>
+        <TennisButton class="block-tennis" href="/releases" label="Go to releases" />
+      </section>
+
+      <section class="block block-tags">
+        <div class="blockhead">
+          <h2 class="coltitle">tags &amp; dates</h2>
+        </div>
+        <div class="tagsText">
+          slim0, jordan playfair, ml buch, ctm, forgiveness, suntub, process, vinyl, vind, cph distillery, velita nobis,
+          incta, dendignia sit, la volenitis, aut am, te earcium, ipsus, esenducipsam, resti-atqui, assus, simagnatis,
+          doluptiat, ...
+        </div>
+        <div class="dates"><div>july ‘24</div><div>june ‘24</div><div>may ‘24</div><div>april ‘24</div></div>
+        <TennisButton class="block-tennis" href="/archive" label="Go to archive" />
+      </section>
+    </div>
+  </SiteShell>
+</BaseLayout>

@@ -1,0 +1,152 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SiteShell from "../components/SiteShell.astro";
+import { getSiteContent } from "../lib/siteContent";
+
+const content = await getSiteContent();
+const releaseList = content.releaseList;
+const cards = content.releaseCards;
+---
+
+<BaseLayout title="15 love — Releases">
+  <SiteShell activeTab="releases">
+    <div slot="left" class="colblock colblock-left releases-left">
+      <section class="block block-releases-list">
+        <div class="blockhead">
+          <h2 class="coltitle">releases</h2>
+        </div>
+        <ul class="list">
+          {releaseList.map((item) => (
+            <li class="li">
+              <span class="heart">♡</span>
+              <span class="text">{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+
+    <div slot="center" class="releases-wide">
+      <section class="releases-rail-box" aria-label="Releases horizontal feed">
+        <div class="releases-rail-scroll">
+          <div class="releases-rail">
+            {cards.map((card) => (
+              <article class="release-card" id={card.id}>
+                <div class="release-post">
+                  <img
+                    class="release-image"
+                    src={card.image.src}
+                    alt={card.image.alt}
+                    width="340"
+                    height="340"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div class="release-meta">
+                    <div class="release-credits" aria-label="Release credits">
+                      {card.credits.map((c) => (
+                        <div class="credit-line">
+                          <span class="credit-label">{c.label}</span> <span class="credit-value">{c.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p class="release-body">{card.body}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  </SiteShell>
+</BaseLayout>
+
+<style>
+  .releases-left {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .releases-left .block-releases-list {
+    flex: 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .releases-wide {
+    height: 100%;
+  }
+
+  .releases-rail-box {
+    border: 1px solid #000;
+    height: 100%;
+    background: #fff;
+  }
+
+  .releases-rail-scroll {
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .releases-rail {
+    min-height: 100%;
+    width: max-content;
+    display: flex;
+  }
+
+  .release-card {
+    width: 840px;
+    min-height: 100%;
+    border-right: 1px solid #000;
+    padding: 12px;
+    display: block;
+  }
+
+  .release-post {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    column-gap: 14px;
+    align-items: start;
+  }
+
+  .release-image {
+    width: 340px;
+    height: 340px;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+  }
+
+  .release-meta {
+    min-width: 320px;
+    width: 320px;
+  }
+
+  .release-credits {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 16px;
+    line-height: 1.2;
+    margin-bottom: 14px;
+  }
+
+  .credit-label {
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: 0.2px;
+  }
+
+  .credit-value {
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .release-body {
+    margin: 0;
+    font-size: 15.4px;
+    line-height: 1.25;
+  }
+</style>

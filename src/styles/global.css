@@ -1,0 +1,197 @@
+:root {
+  --page-bg: #ffffff;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter%20Regular-5af3.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TT2020 Style B";
+  src: url("/fonts/TT2020%20Style%20B%20Regular-4409.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TT2020 Style E";
+  src: url("/fonts/TT2020%20Style%20E%20Regular-af9a.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Times New Roman";
+  src: url("/fonts/Times%20New%20Roman.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: #000;
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Global small black scrollbar (vertical + horizontal) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #000 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-track-piece:vertical {
+  margin-block: 16px;
+}
+
+*::-webkit-scrollbar-track-piece:horizontal {
+  margin-inline: 16px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #000;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #000;
+}
+
+/* Block / column styles (Home page) */
+.colblock {
+  position: relative;
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+}
+
+.block {
+  position: relative;
+  border: 1px solid #000;
+  background: #fff;
+  padding: 14px;
+  padding-bottom: 48px;
+  min-height: 0;
+}
+
+/* Show full borders for left/right columns */
+.col-left .block {
+  border-right: 1px solid #000;
+}
+
+.col-right .block {
+  border-left: 1px solid #000;
+}
+
+.blockhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+  .coltitle {
+  margin: 0;
+  font-size: 26.4px; /* +10% */
+  line-height: 1.1;
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+  .li {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: start;
+  column-gap: 8px;
+  font-size: 15.4px; /* +10% */
+  line-height: 1.25;
+}
+
+  .heart {
+  font-size: 17.6px; /* +10% */
+  line-height: 1;
+  transform: translateY(2px);
+}
+
+  .venue {
+  font-size: 15.4px; /* +10% */
+}
+
+  .tagsText {
+  margin-top: 14px;
+  font-size: 15.4px; /* +10% */
+  line-height: 1.25;
+}
+
+  .dates {
+  margin-top: 28px;
+  text-align: right;
+  font-size: 15.4px; /* +10% */
+  line-height: 1.25;
+  display: grid;
+  gap: 10px;
+}
+
+/* Tennis ball inside blocks positioned bottom-right */
+.block .tennis,
+.block-tennis {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+}
+
+/* Add visible border around center column (frame middle box) */
+.col-center .center-scroll {
+  border: 1px solid #000;
+  padding: 0;
+  box-sizing: border-box;
+  height: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure center-column tennis buttons sit bottom-right (global, not scoped) */
+.col-center .card {
+  position: relative;
+}
+
+.col-center .card .tennis {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+}

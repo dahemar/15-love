@@ -1,0 +1,118 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SiteShell from "../components/SiteShell.astro";
+import { getSiteContent } from "../lib/siteContent";
+
+const content = await getSiteContent();
+const news = content.newsList;
+const cards = content.newsCards;
+const loremExtended = content.newsFlowText;
+---
+
+<BaseLayout title="15 love — News">
+  <SiteShell activeTab="news">
+    <div slot="left" class="colblock colblock-left news-left">
+      <section class="block block-news">
+        <div class="blockhead">
+          <h2 class="coltitle">news</h2>
+        </div>
+        <ul class="list">
+          {news.map((item) => (
+            <li class="li">
+              <span class="heart">♡</span>
+              <span class="text">{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+
+    <div slot="center" class="news-wide">
+      <section class="news-rail-box" aria-label="News horizontal feed">
+        <div class="news-rail-scroll">
+          <div class="news-rail">
+            {cards.map((card) => (
+              <article class="news-card" id={card.id}>
+                <div class="news-flow">
+                  <img class="news-flow-image" src={card.images[0].src} alt={card.images[0].alt} width="260" height="260" loading="lazy" decoding="async" />
+                  <img class="news-flow-image" src={card.images[1].src} alt={card.images[1].alt} width="260" height="260" loading="lazy" decoding="async" />
+                  <p class="news-flow-text">{loremExtended}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  </SiteShell>
+</BaseLayout>
+
+<style>
+  .news-left {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .news-left .block-news {
+    flex: 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .news-wide {
+    height: 100%;
+  }
+
+  .news-rail-box {
+    border: 1px solid #000;
+    height: 100%;
+    background: #fff;
+  }
+
+  .news-rail-scroll {
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .news-rail {
+    min-height: 100%;
+    width: max-content;
+    display: flex;
+  }
+
+  .news-card {
+    width: 860px;
+    min-height: 100%;
+    border-right: 1px solid #000;
+    padding: 12px;
+    position: relative;
+  }
+
+  .news-flow::after {
+    content: "";
+    display: block;
+    clear: both;
+  }
+
+  .news-flow-image {
+    float: left;
+    width: calc((100% - 220px - 16px) / 2);
+    height: 260px;
+    object-fit: cover;
+    display: block;
+    margin-right: 8px;
+    border: 1px solid #000;
+    box-sizing: border-box;
+    background-clip: padding-box;
+  }
+
+  .news-flow-text {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+</style>

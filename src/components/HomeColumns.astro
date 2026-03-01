@@ -1,0 +1,219 @@
+---
+import TennisButton from "./TennisButton.astro";
+import PostFeed from "./PostFeed.astro";
+
+type NewsItem = { text: string };
+type ReleaseItem = { title: string };
+type EventItem = { title: string; venue?: string };
+
+const news: NewsItem[] = [
+  { text: "SLIM0 working on the dubplate of FORGIVENESS at KDS." },
+  { text: "CTM & Skjold Rambow perform “Bow” at Berlin Atonal ‘23." },
+  { text: "ML Buch on US tour." },
+  { text: "Music video for “Sedimentary” out today!" },
+  { text: "Making merch for Suntub." },
+  { text: "Vind for Dior at PFW ‘24." },
+];
+
+const events: EventItem[] = [
+  { title: "SLIM0 release party @Mayhem" },
+  { title: "Jordan Playfair - Spresso", venue: "Loki Brixton" },
+  { title: "Astrid Sonne - Tara Clerkin Trio", venue: "CPH Distillery" },
+  { title: "CTM x Frederik Worm - CTM", venue: "Lille Vega" },
+  { title: "Mere lyd for Palæstina", venue: "CPH Distillery" },
+  { title: "Vind & 15 love release party", venue: "Mayhem" },
+];
+
+const releases: ReleaseItem[] = [
+  { title: "The Shadow Channel - Spellcaster (2025)" },
+  { title: "Desire - TLF Trio (2025)" },
+  { title: "The Hat Comes Off - Jura (2025)" },
+  { title: "Affectionately - Raisa K (2025)" },
+  { title: "Pink Must - Pink Must (2025)" },
+  { title: "Something Inside So Wrong - Jordan Playfair (2024)" },
+  { title: "FORGIVENESS - SLIM0 (2024)" },
+  { title: "Suntub - ML Buch (2023)" },
+  { title: "Vind - CTM (2023)" },
+];
+
+const tags = [
+  "slim0",
+  "jordan playfair",
+  "ml buch",
+  "ctm",
+  "forgiveness",
+  "suntub",
+  "process",
+  "vinyl",
+  "vind",
+  "cph distillery",
+];
+
+const dates = ["july ‘24", "june ‘24", "may ‘24", "april ‘24"]; 
+---
+
+<div slot="left" class="colblock colblock-left">
+  <section class="block block-news">
+    <div class="blockhead">
+      <h2 class="coltitle">news</h2>
+      <TennisButton href="/news" label="Go to news" />
+    </div>
+    <ul class="list">
+      {news.map((n) => (
+        <li class="li">
+          <span class="heart" aria-hidden="true">♡</span>
+          <span class="text">{n.text}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="block block-events">
+    <div class="blockhead">
+      <h2 class="coltitle">events</h2>
+      <TennisButton href="/events" label="Go to events" />
+    </div>
+    <ul class="list">
+      {events.map((e) => (
+        <li class="li">
+          <span class="heart" aria-hidden="true">♡</span>
+          <span class="text">
+            {e.title}
+            {e.venue ? (
+              <>
+                <br />
+                <span class="venue">@ {e.venue}</span>
+              </>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  </section>
+</div>
+
+<div slot="center" class="center">
+  <PostFeed />
+</div>
+
+<div slot="right" class="colblock colblock-right">
+  <section class="block block-releases">
+    <div class="blockhead">
+      <h2 class="coltitle">releases</h2>
+      <TennisButton href="/releases" label="Go to releases" />
+    </div>
+    <ul class="list">
+      {releases.map((r) => (
+        <li class="li">
+          <span class="heart" aria-hidden="true">♡</span>
+          <span class="text">{r.title}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="block block-tags">
+    <div class="blockhead">
+      <h2 class="coltitle">tags &amp; dates</h2>
+      <TennisButton href="/archive" label="Go to archive" />
+    </div>
+    <div class="tagsText">{tags.join(", ")}, ...</div>
+    <div class="dates">
+      {dates.map((d) => (
+        <div>{d}</div>
+      ))}
+    </div>
+  </section>
+</div>
+
+<style>
+  .block {
+    position: absolute;
+    left: 0;
+    right: 0;
+  }
+
+  /* PDF page 9: news/release titles sit at y≈199.9; events/tags at y≈640.2.
+     Frame top is 180 + 20 padding = 200, so events/tags start at ~440.2. */
+  .colblock-left,
+  .colblock-right {
+    position: relative;
+    height: 100%;
+  }
+
+  .block-news,
+  .block-releases {
+    top: 0;
+  }
+
+  .block-events,
+  .block-tags {
+    top: 440.25px;
+  }
+
+  .blockhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .coltitle {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.1;
+    font-weight: 400;
+    text-transform: lowercase;
+  }
+
+  .list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .li {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    align-items: start;
+    column-gap: 8px;
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .heart {
+    font-size: 20px;
+    line-height: 1;
+    transform: translateY(2px);
+  }
+
+  .venue {
+    font-size: 18px;
+  }
+
+  .year {
+    white-space: nowrap;
+  }
+
+  .center {
+    padding-top: 2px;
+  }
+
+  .tagsText {
+    margin-top: 14px;
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .dates {
+    margin-top: 28px;
+    text-align: right;
+    font-size: 18px;
+    line-height: 1.25;
+    display: grid;
+    gap: 10px;
+  }
+</style>

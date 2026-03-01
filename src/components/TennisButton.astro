@@ -1,0 +1,35 @@
+---
+type Props = {
+  href: string;
+  label: string;
+};
+
+const { href, label } = Astro.props;
+---
+
+<a class="tennis" href={href} aria-label={label}>
+  <img src="/assets/tennis.png" alt="" width="26" height="26" draggable="false" decoding="async" />
+</a>
+
+<style>
+  .tennis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    text-decoration: none;
+  }
+  .tennis img {
+    width: 26px;
+    height: 26px;
+    display: block;
+    pointer-events: none;
+    user-select: none;
+  }
+  .tennis:focus-visible {
+    outline: 2px solid #0000ff;
+    outline-offset: 2px;
+  }
+</style>

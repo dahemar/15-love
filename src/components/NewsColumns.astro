@@ -1,0 +1,209 @@
+---
+import TennisButton from "./TennisButton.astro";
+
+type EventItem = { title: string; venue?: string };
+
+type NewsCard = {
+  id: string;
+  image: string;
+  alt: string;
+  title: string;
+  body: string;
+};
+
+const news = [
+  "SLIM0 working on the dubplate of FORGIVENESS at KDS.",
+  "CTM & Skjold Rambow perform “Bow” at Berlin Atonal ‘23.",
+  "ML Buch on US tour.",
+  "Music video for “Sedimentary” out today!",
+  "Making merch for Suntub.",
+];
+
+const events: EventItem[] = [
+  { title: "SLIM0 release party @Mayhem" },
+  { title: "Jordan Playfair - Spresso", venue: "Loki Brixton" },
+  { title: "Astrid Sonne - Tara Clerkin Trio", venue: "CPH Distillery" },
+  { title: "CTM x Frederik Worm - CTM", venue: "Lille Vega" },
+  { title: "Mere lyd for Palæstina", venue: "CPH Distillery" },
+  { title: "Vind & 15 love release party", venue: "Mayhem" },
+];
+
+const cards: NewsCard[] = [
+  {
+    id: "n1",
+    image: "/assets/image-mockup1.png",
+    alt: "Studio session",
+    title: "SLIM0 @ KDS",
+    body:
+      "SLIM0 working on the dubplate of FORGIVENESS at KDS. Process notes, edits, and arrangement snapshots from the session.",
+  },
+  {
+    id: "n2",
+    image: "/assets/FTL005_artwork_casette_export.jpg",
+    alt: "Jordan Playfair release artwork",
+    title: "Jordan Playfair",
+    body:
+      "Something Inside So Wrong release assets and rollout details. Cover draft, cassette artwork and digital release prep.",
+  },
+  {
+    id: "n3",
+    image: "/assets/IMG_0271.JPG",
+    alt: "Suntub process",
+    title: "Suntub process",
+    body:
+      "‘Suntub’ FTL003 recording process excerpts, documentation photos, and session fragments from recent edits.",
+  },
+  {
+    id: "n4",
+    image: "/assets/FTL003 process 4.png",
+    alt: "Process image 4",
+    title: "Process 04",
+    body:
+      "Material and visual notes from process image 04. Sequencing references, annotations and intermediate export versions.",
+  },
+  {
+    id: "n5",
+    image: "/assets/FTL003 process 5.png",
+    alt: "Process image 5",
+    title: "Process 05",
+    body:
+      "Continuation of the series with detail crops and revisions. Color and type tests across release mockups.",
+  },
+  {
+    id: "n6",
+    image: "/assets/FTL003 process 7.png",
+    alt: "Process image 7",
+    title: "Process 07",
+    body:
+      "Latest updates in the thread, including final passes and export-ready assets used in publication.",
+  },
+];
+---
+
+<div slot="left" class="colblock colblock-left news-left">
+  <section class="block block-news">
+    <div class="blockhead">
+      <h2 class="coltitle">news</h2>
+    </div>
+    <ul class="list">
+      {news.map((item) => (
+        <li class="li">
+          <span class="heart">♡</span>
+          <span class="text">{item}</span>
+        </li>
+      ))}
+    </ul>
+    <TennisButton class="block-tennis" href="/news" label="Go to news" />
+  </section>
+
+  <section class="block block-events">
+    <div class="blockhead">
+      <h2 class="coltitle">events</h2>
+    </div>
+    <ul class="list">
+      {events.map((e) => (
+        <li class="li">
+          <span class="heart">♡</span>
+          <span class="text">
+            {e.title}
+            {e.venue ? (
+              <>
+                <br />
+                <span class="venue">@ {e.venue}</span>
+              </>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+    <TennisButton class="block-tennis" href="/events" label="Go to events" />
+  </section>
+</div>
+
+<div slot="center" class="news-wide">
+  <section class="news-rail-box" aria-label="News horizontal feed">
+    <div class="news-rail-scroll">
+      <div class="news-rail">
+        {cards.map((card) => (
+          <article class="news-card" id={card.id}>
+            <img src={card.image} alt={card.alt} width="260" height="260" loading="lazy" decoding="async" />
+            <h3>{card.title}</h3>
+            <p>{card.body}</p>
+            <TennisButton class="card-tennis" href={`#${card.id}`} label="Jump to card" />
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+</div>
+
+<style>
+  .news-left {
+    height: 100%;
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .news-wide {
+    height: 100%;
+  }
+
+  .news-rail-box {
+    border: 1px solid #000;
+    height: 100%;
+    background: #fff;
+  }
+
+  .news-rail-scroll {
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .news-rail {
+    min-height: 100%;
+    width: max-content;
+    display: flex;
+  }
+
+  .news-card {
+    width: 320px;
+    min-height: 100%;
+    border-right: 1px solid #000;
+    padding: 12px 12px 42px;
+    position: relative;
+    display: grid;
+    grid-template-rows: 260px auto 1fr;
+    gap: 10px;
+  }
+
+  .news-card img {
+    width: 260px;
+    height: 260px;
+    object-fit: cover;
+    border: 1px solid #000;
+  }
+
+  .news-card h3 {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.2;
+    font-weight: 400;
+    text-transform: lowercase;
+  }
+
+  .news-card p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .news-card .card-tennis,
+  .news-card .tennis {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+  }
+</style>
