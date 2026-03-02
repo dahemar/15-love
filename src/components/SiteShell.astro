@@ -23,8 +23,8 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
     <div class="surface" data-surface>
       <header class="header">
         <div class="brand" aria-label="15 love">
-                <img class="brandLogo" src="/assets/15love_logo_1.svg" alt="15 love logo" width="180" height="72" />
-              </div>
+          <img class="brandLogo" src="/assets/15love_logo_1.svg" alt="15 love logo" width="180" height="72" />
+        </div>
 
         <nav class="topnav" aria-label="Primary">
           <a class={"tab" + (activeTab === "home" ? " is-active" : "")} href="/home/">home</a><a class={"tab" + (activeTab === "news" ? " is-active" : "")} href="/news/">/news</a><a class={"tab" + (activeTab === "releases" ? " is-active" : "")} href="/releases/">/releases</a><a class={"tab" + (activeTab === "events" ? " is-active" : "")} href="/events/">/events</a><a class={"tab" + (activeTab === "about" ? " is-active" : "")} href="/about/">/about</a><a class={"tab" + (activeTab === "archive" ? " is-active" : "")} href="/archive/">/archive</a>
@@ -135,33 +135,18 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
   .brand {
     position: absolute;
     left: 50%;
-    top: 36px;
+    top: 18px;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  .brandOval {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #000;
-    border-radius: 999px;
-    padding: 4px 28px;
-    background: transparent;
-    z-index: 5;
-    transform-origin: center;
-  }
-
-  .brandText {
-    font-family: inherit;
-    font-size: inherit;
-    line-height: 1;
-    font-weight: 400;
-    color: #000;
-    letter-spacing: 0.2px;
-    text-transform: lowercase;
+  .brandLogo {
+    display: block;
+    width: 180px;
+    height: auto;
+    max-width: 100%;
   }
 
   .topnav {
