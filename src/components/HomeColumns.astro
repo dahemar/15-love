@@ -1,40 +1,12 @@
 ---
 import TennisButton from "./TennisButton.astro";
 import PostFeed from "./PostFeed.astro";
+import { getSiteContent } from "../lib/siteContent";
 
-type NewsItem = { text: string };
-type ReleaseItem = { title: string };
-type EventItem = { title: string; venue?: string };
-
-const news: NewsItem[] = [
-  { text: "SLIM0 working on the dubplate of FORGIVENESS at KDS." },
-  { text: "CTM & Skjold Rambow perform “Bow” at Berlin Atonal ‘23." },
-  { text: "ML Buch on US tour." },
-  { text: "Music video for “Sedimentary” out today!" },
-  { text: "Making merch for Suntub." },
-  { text: "Vind for Dior at PFW ‘24." },
-];
-
-const events: EventItem[] = [
-  { title: "SLIM0 release party @Mayhem" },
-  { title: "Jordan Playfair - Spresso", venue: "Loki Brixton" },
-  { title: "Astrid Sonne - Tara Clerkin Trio", venue: "CPH Distillery" },
-  { title: "CTM x Frederik Worm - CTM", venue: "Lille Vega" },
-  { title: "Mere lyd for Palæstina", venue: "CPH Distillery" },
-  { title: "Vind & 15 love release party", venue: "Mayhem" },
-];
-
-const releases: ReleaseItem[] = [
-  { title: "The Shadow Channel - Spellcaster (2025)" },
-  { title: "Desire - TLF Trio (2025)" },
-  { title: "The Hat Comes Off - Jura (2025)" },
-  { title: "Affectionately - Raisa K (2025)" },
-  { title: "Pink Must - Pink Must (2025)" },
-  { title: "Something Inside So Wrong - Jordan Playfair (2024)" },
-  { title: "FORGIVENESS - SLIM0 (2024)" },
-  { title: "Suntub - ML Buch (2023)" },
-  { title: "Vind - CTM (2023)" },
-];
+const content = await getSiteContent();
+const news = content.newsList.slice(0, 9);
+const events = content.eventsList.slice(0, 9);
+const releases = content.releaseList.slice(0, 9);
 
 const tags = [
   "slim0",
@@ -59,10 +31,10 @@ const dates = ["july ‘24", "june ‘24", "may ‘24", "april ‘24"];
       <TennisButton href="/news" label="Go to news" />
     </div>
     <ul class="list">
-      {news.map((n) => (
+      {news.map((item) => (
         <li class="li">
           <span class="heart" aria-hidden="true">♡</span>
-          <span class="text">{n.text}</span>
+          <span class="text">{item}</span>
         </li>
       ))}
     </ul>
@@ -74,18 +46,10 @@ const dates = ["july ‘24", "june ‘24", "may ‘24", "april ‘24"];
       <TennisButton href="/events" label="Go to events" />
     </div>
     <ul class="list">
-      {events.map((e) => (
+      {events.map((item) => (
         <li class="li">
           <span class="heart" aria-hidden="true">♡</span>
-          <span class="text">
-            {e.title}
-            {e.venue ? (
-              <>
-                <br />
-                <span class="venue">@ {e.venue}</span>
-              </>
-            ) : null}
-          </span>
+          <span class="text">{item}</span>
         </li>
       ))}
     </ul>
@@ -103,10 +67,10 @@ const dates = ["july ‘24", "june ‘24", "may ‘24", "april ‘24"];
       <TennisButton href="/releases" label="Go to releases" />
     </div>
     <ul class="list">
-      {releases.map((r) => (
+      {releases.map((item) => (
         <li class="li">
           <span class="heart" aria-hidden="true">♡</span>
-          <span class="text">{r.title}</span>
+          <span class="text">{item}</span>
         </li>
       ))}
     </ul>

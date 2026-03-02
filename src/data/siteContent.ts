@@ -16,6 +16,7 @@ export type ReleaseCard = {
 
 export type SiteContent = {
   newsList: string[];
+  eventsList: string[];
   newsCards: NewsCard[];
   newsFlowText: string;
   releaseList: string[];
@@ -36,6 +37,14 @@ export const localSiteContent: SiteContent = {
     `Jordan Playfair’s album release\nconcert!`,
     `Suntub vinyl press! Get yours\nfresh!`,
     `“Drama” from the forthcoming\nCTM album “Vind” is out today!`,
+  ],
+  eventsList: [
+    `SLIM0 release party @Mayhem`,
+    `Jordan Playfair - Spresso @ Loki Brixton`,
+    `Astrid Sonne - Tara Clerkin Trio @ CPH Distillery`,
+    `CTM x Frederik Worm - CTM @ Lille Vega`,
+    `Mere lyd for Palæstina @ CPH Distillery`,
+    `Vind & 15 love release party @ Mayhem`,
   ],
   newsCards: [
     {

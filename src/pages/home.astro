@@ -3,6 +3,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
 import TennisButton from "../components/TennisButton.astro";
 import PostFeed from "../components/PostFeed.astro";
+import { getSiteContent } from "../lib/siteContent";
+
+const content = await getSiteContent();
+const news = content.newsList.slice(0, 9);
+const events = content.eventsList.slice(0, 9);
+const releases = content.releaseList.slice(0, 9);
 ---
 
 <BaseLayout title="15 love — Home">
@@ -13,11 +19,9 @@ import PostFeed from "../components/PostFeed.astro";
           <h2 class="coltitle">news</h2>
         </div>
         <ul class="list">
-          <li class="li"><span class="heart">♡</span><span class="text">SLIM0 working on the dubplate of FORGIVENESS at KDS.</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">CTM & Skjold Rambow perform “Bow” at Berlin Atonal ‘23.</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">ML Buch on US tour.</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Music video for “Sedimentary” out today!</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Making merch for Suntub.</span></li>
+          {news.map((item) => (
+            <li class="li"><span class="heart">♡</span><span class="text">{item}</span></li>
+          ))}
         </ul>
         <TennisButton class="block-tennis" href="/news" label="Go to news" />
       </section>
@@ -27,12 +31,9 @@ import PostFeed from "../components/PostFeed.astro";
           <h2 class="coltitle">events</h2>
         </div>
         <ul class="list">
-          <li class="li"><span class="heart">♡</span><span class="text">SLIM0 release party @Mayhem</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Jordan Playfair - Spresso<br/><span class="venue">@ Loki Brixton</span></span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Astrid Sonne - Tara Clerkin Trio<br/><span class="venue">@ CPH Distillery</span></span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">CTM x Frederik Worm - CTM<br/><span class="venue">@ Lille Vega</span></span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Mere lyd for Palæstina<br/><span class="venue">@ CPH Distillery</span></span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Vind & 15 love release party<br/><span class="venue">@ Mayhem</span></span></li>
+          {events.map((item) => (
+            <li class="li"><span class="heart">♡</span><span class="text">{item}</span></li>
+          ))}
         </ul>
         <TennisButton class="block-tennis" href="/events" label="Go to events" />
       </section>
@@ -48,15 +49,9 @@ import PostFeed from "../components/PostFeed.astro";
           <h2 class="coltitle">releases</h2>
         </div>
         <ul class="list">
-          <li class="li"><span class="heart">♡</span><span class="text">The Shadow Channel - Spellcaster (2025)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Desire - TLF Trio (2025)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">The Hat Comes Off - Jura (2025)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Affectionately - Raisa K (2025)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Pink Must - Pink Must (2025)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Something Inside So Wrong - Jordan Playfair (2024)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">FORGIVENESS - SLIM0 (2024)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Suntub - ML Buch (2023)</span></li>
-          <li class="li"><span class="heart">♡</span><span class="text">Vind - CTM (2023)</span></li>
+          {releases.map((item) => (
+            <li class="li"><span class="heart">♡</span><span class="text">{item}</span></li>
+          ))}
         </ul>
         <TennisButton class="block-tennis" href="/releases" label="Go to releases" />
       </section>
