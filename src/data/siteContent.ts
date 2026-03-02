@@ -3,6 +3,7 @@ export type NewsImage = { src: string; alt: string };
 export type NewsCard = {
   id: string;
   images: NewsImage[];
+  body?: string;
 };
 
 export type ReleaseCredit = { label: string; value: string };

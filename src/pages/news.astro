@@ -34,9 +34,10 @@ const loremExtended = content.newsFlowText;
             {cards.map((card) => (
               <article class="news-card" id={card.id}>
                 <div class="news-flow">
-                  <img class="news-flow-image" src={card.images[0].src} alt={card.images[0].alt} width="260" height="260" loading="lazy" decoding="async" />
-                  <img class="news-flow-image" src={card.images[1].src} alt={card.images[1].alt} width="260" height="260" loading="lazy" decoding="async" />
-                  <p class="news-flow-text">{loremExtended}</p>
+                  {card.images.slice(0, 2).map((image) => (
+                    <img class="news-flow-image" src={image.src} alt={image.alt} width="260" height="260" loading="lazy" decoding="async" />
+                  ))}
+                  <p class="news-flow-text">{card.body ?? loremExtended}</p>
                 </div>
               </article>
             ))}
