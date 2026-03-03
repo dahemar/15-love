@@ -12,7 +12,7 @@ function pickStringArray(value: unknown, fallback: string[]): string[] {
 
 function pickObjectArray<T>(value: unknown, fallback: T[]): T[] {
   if (!Array.isArray(value)) return fallback;
-  return value.length ? (value as T[]) : fallback;
+  return value as T[]; // respect empty arrays from Strapi (don't fall back)
 }
 
 type PostCategory = "news" | "events" | "releases";
