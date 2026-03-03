@@ -260,21 +260,20 @@ export async function getSiteContent(): Promise<SiteContent> {
       title: buckets.news[i]?.title ?? card.title,
     }));
 
-    // Only use fully Strapi-sourced cards if they include images
+    // Build Strapi-sourced cards for all news posts.
+    // Images are optional: posts without images still render as text cards.
     const newsCardsFromPosts = buckets.news
       .map((post) => {
         const imagesFromLegacy = parseImageArray(post.images);
         const imagesFromBlocks = parseMediaImagesFromEventBlocks(post.eventBlocks, baseUrl);
         const images = imagesFromLegacy.length ? imagesFromLegacy : imagesFromBlocks;
-        if (!images.length) return null;
         return {
           id: post.id,
           title: post.title,
           images: images.slice(0, 2),
           body: post.body,
         };
-      })
-      .filter((item): item is SiteContent["newsCards"][number] => Boolean(item));
+      });
 
     const releaseCardsFromPosts = buckets.releases
       .map((post) => {
