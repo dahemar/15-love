@@ -1,4 +1,4 @@
-import { localSiteContent, type SiteContent } from "../data/siteContent";
+import { localSiteContent, type SiteContent, type EventPost, type EventBlock } from "../data/siteContent";
 
 const CMS_MODE = (import.meta.env.CMS_MODE ?? "local").toLowerCase();
 const STRAPI_URL = import.meta.env.STRAPI_URL;
@@ -25,6 +25,7 @@ type PostRecord = {
   images?: unknown;
   image?: unknown;
   credits?: unknown;
+  eventBlocks?: unknown[];
 };
 
 function parseStrapiEntity(item: any): Record<string, unknown> {
@@ -84,6 +85,7 @@ function parsePosts(items: unknown[]): PostRecord[] {
       images: src.images,
       image: src.image,
       credits: src.credits,
+      eventBlocks: Array.isArray(src.eventBlocks) ? src.eventBlocks : [],
     });
   }
 
@@ -106,6 +108,69 @@ function pickLatestPostsByCategory(items: PostRecord[], limitByCategory: number)
   return buckets;
 }
 
+function parseEventBlocks(raw: unknown[], strapiBase: string): EventBlock[] {
+  const blocks: EventBlock[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const b = item as Record<string, unknown>;
+    const comp = b.__component;
+
+    if (comp === "events.details") {
+      blocks.push({
+        __component: "events.details",
+        id: typeof b.id === "number" ? b.id : 0,
+        headline: typeof b.headline === "string" ? b.headline : "",
+        venue: typeof b.venue === "string" ? b.venue : undefined,
+        description: typeof b.description === "string" ? b.description : undefined,
+        dateLabel: typeof b.dateLabel === "string" ? b.dateLabel : undefined,
+      });
+    } else if (comp === "events.rich-text") {
+      blocks.push({
+        __component: "events.rich-text",
+        id: typeof b.id === "number" ? b.id : 0,
+        title: typeof b.title === "string" ? b.title : undefined,
+        body: typeof b.body === "string" ? b.body : undefined,
+      });
+    } else if (comp === "events.media") {
+      // image may be: { url, alternativeText, width, height } (v5 flat) or null/undefined
+      const imgRaw = b.image as Record<string, unknown> | null | undefined;
+      let image: { url: string; alt: string; width?: number; height?: number } | null = null;
+      if (imgRaw && typeof imgRaw === "object") {
+        const url = typeof imgRaw.url === "string" ? imgRaw.url : null;
+        if (url) {
+          const resolvedUrl = url.startsWith("/") ? `${strapiBase}${url}` : url;
+          image = {
+            url: resolvedUrl,
+            alt: typeof imgRaw.alternativeText === "string" && imgRaw.alternativeText.trim()
+              ? imgRaw.alternativeText.trim()
+              : "Image",
+            width: typeof imgRaw.width === "number" ? imgRaw.width : undefined,
+            height: typeof imgRaw.height === "number" ? imgRaw.height : undefined,
+          };
+        }
+      }
+      const pos = b.imagePosition;
+      blocks.push({
+        __component: "events.media",
+        id: typeof b.id === "number" ? b.id : 0,
+        image,
+        caption: typeof b.caption === "string" ? b.caption : undefined,
+        imagePosition: pos === "right" ? "right" : pos === "full" ? "full" : "left",
+      });
+    }
+  }
+  return blocks;
+}
+
+function parseEventPosts(posts: PostRecord[], strapiBase: string): EventPost[] {
+  return posts.map((post) => ({
+    id: post.id,
+    title: post.title,
+    body: post.body,
+    eventBlocks: parseEventBlocks(Array.isArray(post.eventBlocks) ? post.eventBlocks : [], strapiBase),
+  }));
+}
+
 function mergeContent(raw: unknown): SiteContent {
   const src = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -115,6 +180,7 @@ function mergeContent(raw: unknown): SiteContent {
     newsFlowText: typeof src.newsFlowText === "string" && src.newsFlowText.trim().length > 0 ? src.newsFlowText : localSiteContent.newsFlowText,
     releaseList: pickStringArray(src.releaseList, localSiteContent.releaseList),
     releaseCards: pickObjectArray(src.releaseCards, localSiteContent.releaseCards),
+    eventPosts: [],
   };
 }
 
@@ -133,7 +199,7 @@ export async function getSiteContent(): Promise<SiteContent> {
 
   const baseUrl = STRAPI_URL.replace(/\/+$/, "");
   const siteContentEndpoint = `${baseUrl}/api/site-content`;
-  const postsEndpoint = `${baseUrl}/api/posts?sort[0]=publishedAt:desc&pagination[pageSize]=200`;
+  const postsEndpoint = `${baseUrl}/api/posts?sort[0]=publishedAt:desc&pagination[pageSize]=200&populate[eventBlocks][populate]=*`;
   const headers = {
     ...(STRAPI_TOKEN ? { Authorization: `Bearer ${STRAPI_TOKEN}` } : {}),
   };
@@ -163,12 +229,20 @@ export async function getSiteContent(): Promise<SiteContent> {
     const posts = parsePosts(rawPosts);
     const buckets = pickLatestPostsByCategory(posts, 9);
 
+    // Enrich local fallback cards with titles from Strapi posts (one-to-one by index)
+    const newsCardsWithTitles = base.newsCards.map((card, i) => ({
+      ...card,
+      title: buckets.news[i]?.title ?? card.title,
+    }));
+
+    // Only use fully Strapi-sourced cards if they include images
     const newsCardsFromPosts = buckets.news
       .map((post) => {
         const images = parseImageArray(post.images);
         if (!images.length) return null;
         return {
           id: post.id,
+          title: post.title,
           images: images.slice(0, 2),
           body: post.body,
         };
@@ -188,13 +262,16 @@ export async function getSiteContent(): Promise<SiteContent> {
       })
       .filter((item): item is SiteContent["releaseCards"][number] => Boolean(item));
 
+    const eventPostsFromStrapi = parseEventPosts(buckets.events, baseUrl);
+
     return {
       ...base,
       newsList: buckets.news.length ? buckets.news.map((post) => post.title) : base.newsList,
       eventsList: buckets.events.length ? buckets.events.map((post) => post.title) : base.eventsList,
       releaseList: buckets.releases.length ? buckets.releases.map((post) => post.title) : base.releaseList,
-      newsCards: newsCardsFromPosts.length ? newsCardsFromPosts : base.newsCards,
+      newsCards: newsCardsFromPosts.length ? newsCardsFromPosts : newsCardsWithTitles,
       releaseCards: releaseCardsFromPosts.length ? releaseCardsFromPosts : base.releaseCards,
+      eventPosts: eventPostsFromStrapi,
     };
   } catch {
     return localSiteContent;

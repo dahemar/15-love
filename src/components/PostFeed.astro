@@ -1,7 +1,16 @@
 ---
 import TennisButton from "./TennisButton.astro";
+import type { EventPost, EventDetailsBlock, EventRichTextBlock, EventMediaBlock } from "../data/siteContent";
 
-type Post =
+interface Props {
+  eventPosts?: EventPost[];
+}
+
+const { eventPosts = [] } = Astro.props;
+
+// ── Renderable post types ────────────────────────────────────────────────────
+
+type RenderPost =
   | {
       id: string;
       kind: "text";
@@ -10,11 +19,13 @@ type Post =
     }
   | {
       id: string;
-      kind: "image-left";
-      body?: string;
+      kind: "image-left" | "image-right";
       imageSrc: string;
       imageAlt: string;
+      caption?: string;
+      body?: string;
       credits?: Array<{ label: string; value: string }>;
+      details?: { headline: string; venue?: string; dateLabel?: string };
     }
   | {
       id: string;
@@ -23,7 +34,61 @@ type Post =
       images: Array<{ src: string; alt: string }>;
     };
 
-const posts: Post[] = [
+// ── Map Strapi EventPost → RenderPost ───────────────────────────────────────
+
+function eventPostToCard(post: EventPost): RenderPost {
+  const mediaBlocks = post.eventBlocks.filter(
+    (b): b is EventMediaBlock => b.__component === "events.media" && b.image !== null,
+  );
+  const richBlocks = post.eventBlocks.filter(
+    (b): b is EventRichTextBlock => b.__component === "events.rich-text",
+  );
+  const detailsBlock = post.eventBlocks.find(
+    (b): b is EventDetailsBlock => b.__component === "events.details",
+  );
+
+  const bodyText =
+    richBlocks
+      .map((b) => b.body ?? "")
+      .filter(Boolean)
+      .join("\n\n") ||
+    detailsBlock?.description ||
+    post.body ||
+    "";
+
+  const imagesWithUrl = mediaBlocks.filter((m) => m.image !== null);
+
+  if (imagesWithUrl.length === 0) {
+    return { id: post.id, kind: "text", title: detailsBlock?.headline, body: bodyText };
+  }
+
+  if (imagesWithUrl.length === 1) {
+    const m = imagesWithUrl[0];
+    return {
+      id: post.id,
+      kind: m.imagePosition === "right" ? "image-right" : "image-left",
+      imageSrc: m.image!.url,
+      imageAlt: m.image!.alt,
+      caption: m.caption,
+      body: bodyText || undefined,
+      details: detailsBlock
+        ? { headline: detailsBlock.headline, venue: detailsBlock.venue, dateLabel: detailsBlock.dateLabel }
+        : undefined,
+    };
+  }
+
+  // 2+ images → gallery
+  return {
+    id: post.id,
+    kind: "gallery",
+    images: imagesWithUrl.map((m) => ({ src: m.image!.url, alt: m.image!.alt })),
+    body: bodyText,
+  };
+}
+
+// ── Static fallback posts ───────────────────────────────────────────────────
+
+const HARDCODED: RenderPost[] = [
   {
     id: "p1",
     kind: "image-left",
@@ -83,15 +148,31 @@ ipsunt dolo cum qui cone`,
     body: "Resciis ex escim et opta sed entio velles et laut lanimint voloris…",
   },
 ];
+
+// Prefer Strapi event posts with images; fall back to any event posts; then hardcoded.
+const eventPostsWithMedia = eventPosts.filter((p) =>
+  p.eventBlocks.some((b) => b.__component === "events.media" && b.image !== null),
+);
+const postsToRender: RenderPost[] =
+  eventPostsWithMedia.length > 0
+    ? eventPostsWithMedia.map(eventPostToCard)
+    : eventPosts.length > 0
+      ? eventPosts.map(eventPostToCard)
+      : HARDCODED;
 ---
 
 <div class="feed" aria-label="Posts">
-  {posts.map((p, i) => (
+  {postsToRender.map((p, i) => (
     <article class={"card kind-" + p.kind} id={p.id}>
       <div class="content">
-        {p.kind === "text" ? <p class="body">{p.body}</p> : null}
+        {p.kind === "text" ? (
+          <>
+            {(p as any).title ? <h3 class="postTitle">{(p as any).title}</h3> : null}
+            <p class="body">{p.body}</p>
+          </>
+        ) : null}
 
-        {p.kind === "image-left" ? (
+        {(p.kind === "image-left" || p.kind === "image-right") ? (
           <>
             <img
               class="media"
@@ -103,17 +184,37 @@ ipsunt dolo cum qui cone`,
               decoding="async"
               fetchpriority={i === 0 ? "high" : undefined}
             />
-            {p.credits ? (
-              <div class="credits" aria-label="Credits">
-                {p.credits.map((c) => (
-                  <div class="creditLine">
-                    <span class="creditLabel">{c.label}</span> <span class="creditValue">{c.value}</span>
+            <div class="textSide">
+              {p.credits ? (
+                <div class="credits" aria-label="Credits">
+                  {p.credits.map((c) => (
+                    <div class="creditLine">
+                      <span class="creditLabel">{c.label}</span> <span class="creditValue">{c.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : p.details ? (
+                <div class="credits" aria-label="Event details">
+                  <div class="creditLine detailHeadline">
+                    <span class="creditValue">{p.details.headline}</span>
                   </div>
-                ))}
-              </div>
-            ) : p.body ? (
-              <p class="body">{p.body}</p>
-            ) : null}
+                  {p.details.venue ? (
+                    <div class="creditLine">
+                      <span class="creditLabel">Venue:</span>{" "}
+                      <span class="creditValue">{p.details.venue}</span>
+                    </div>
+                  ) : null}
+                  {p.details.dateLabel ? (
+                    <div class="creditLine">
+                      <span class="creditLabel">Date:</span>{" "}
+                      <span class="creditValue">{p.details.dateLabel}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {p.body ? <p class="body">{p.body}</p> : null}
+              {p.caption ? <p class="caption">{p.caption}</p> : null}
+            </div>
           </>
         ) : null}
 
@@ -231,5 +332,38 @@ ipsunt dolo cum qui cone`,
     object-fit: cover;
     border: 1px solid #000;
     display: block;
+  }
+
+  /* ── Dynamic / Strapi-sourced content ─────────────────────────────────── */
+
+  .textSide {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Reorder image to second column for image-right layout */
+  .kind-image-right .media {
+    order: 2;
+  }
+
+  .postTitle {
+    margin: 0;
+    font-size: 15.4px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .detailHeadline .creditValue {
+    font-weight: 600;
+  }
+
+  .caption {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.25;
+    color: #555;
+    font-style: italic;
   }
 </style>

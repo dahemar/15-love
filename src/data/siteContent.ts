@@ -1,7 +1,43 @@
 export type NewsImage = { src: string; alt: string };
 
+// ── Event post types ─────────────────────────────────────────────────────────
+
+export type EventDetailsBlock = {
+  __component: "events.details";
+  id: number;
+  headline: string;
+  venue?: string;
+  description?: string;
+  dateLabel?: string;
+};
+
+export type EventRichTextBlock = {
+  __component: "events.rich-text";
+  id: number;
+  title?: string;
+  body?: string;
+};
+
+export type EventMediaBlock = {
+  __component: "events.media";
+  id: number;
+  image: { url: string; alt: string; width?: number; height?: number } | null;
+  caption?: string;
+  imagePosition: "left" | "right" | "full";
+};
+
+export type EventBlock = EventDetailsBlock | EventRichTextBlock | EventMediaBlock;
+
+export type EventPost = {
+  id: string;
+  title: string;
+  body?: string;
+  eventBlocks: EventBlock[];
+};
+
 export type NewsCard = {
   id: string;
+  title?: string;
   images: NewsImage[];
   body?: string;
 };
@@ -22,6 +58,7 @@ export type SiteContent = {
   newsFlowText: string;
   releaseList: string[];
   releaseCards: ReleaseCard[];
+  eventPosts: EventPost[];
 };
 
 const loremContinuous =
@@ -119,4 +156,5 @@ export const localSiteContent: SiteContent = {
         "Ellaborent prat. Upta aut assi doluptaquo et volorem dolorem et, velesed que vendae cusam, as et alia quid qui odipsam, que prehent volupta sit, temque vendus ilique net adis reic te ventur? Tur remporerum sit, omnimporro bea nobit lam que nusam, con rem voloreium intiunt etur siminciis el inis est alit rem fugit porunt eosam que omnimusam hit molor autatur aut ullaut ut exceate.",
     },
   ],
+  eventPosts: [],
 };

@@ -7,6 +7,7 @@ const content = await getSiteContent();
 const news = content.newsList.slice(0, 9);
 const events = content.eventsList.slice(0, 9);
 const releases = content.releaseList.slice(0, 9);
+const eventPosts = content.eventPosts ?? [];
 
 const tags = [
   "slim0",
@@ -57,7 +58,7 @@ const dates = ["july ‘24", "june ‘24", "may ‘24", "april ‘24"];
 </div>
 
 <div slot="center" class="center">
-  <PostFeed />
+  <PostFeed eventPosts={eventPosts} />
 </div>
 
 <div slot="right" class="colblock colblock-right">
