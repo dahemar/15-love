@@ -50,6 +50,31 @@ function parseImageArray(value: unknown): { src: string; alt: string }[] {
   return value.map(parseImage).filter((item): item is { src: string; alt: string } => Boolean(item));
 }
 
+function parseMediaImagesFromEventBlocks(value: unknown, strapiBase: string): { src: string; alt: string }[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((block) => {
+      if (!block || typeof block !== "object") return null;
+      const src = block as Record<string, unknown>;
+      if (src.__component !== "events.media") return null;
+
+      const image = src.image as Record<string, unknown> | null | undefined;
+      if (!image || typeof image !== "object") return null;
+
+      const rawUrl = typeof image.url === "string" ? image.url : null;
+      if (!rawUrl) return null;
+
+      const resolvedUrl = rawUrl.startsWith("/") ? `${strapiBase}${rawUrl}` : rawUrl;
+      const alt = typeof image.alternativeText === "string" && image.alternativeText.trim().length > 0
+        ? image.alternativeText.trim()
+        : "Image";
+
+      return { src: resolvedUrl, alt };
+    })
+    .filter((item): item is { src: string; alt: string } => Boolean(item));
+}
+
 function parseCredits(value: unknown): { label: string; value: string }[] {
   if (!Array.isArray(value)) return [];
   const credits = value
@@ -238,7 +263,9 @@ export async function getSiteContent(): Promise<SiteContent> {
     // Only use fully Strapi-sourced cards if they include images
     const newsCardsFromPosts = buckets.news
       .map((post) => {
-        const images = parseImageArray(post.images);
+        const imagesFromLegacy = parseImageArray(post.images);
+        const imagesFromBlocks = parseMediaImagesFromEventBlocks(post.eventBlocks, baseUrl);
+        const images = imagesFromLegacy.length ? imagesFromLegacy : imagesFromBlocks;
         if (!images.length) return null;
         return {
           id: post.id,
