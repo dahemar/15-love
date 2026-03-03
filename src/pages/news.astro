@@ -7,6 +7,14 @@ const content = await getSiteContent();
 const news = content.newsList;
 const cards = content.newsCards;
 const loremExtended = content.newsFlowText;
+const newsCards = cards.length
+  ? cards
+  : news.map((title, index) => ({
+      id: `news-${index}`,
+      title,
+      images: [],
+      body: loremExtended,
+    }));
 ---
 
 <BaseLayout title="15 love — News">
@@ -31,7 +39,7 @@ const loremExtended = content.newsFlowText;
       <section class="news-rail-box" aria-label="News horizontal feed">
         <div class="news-rail-scroll">
           <div class="news-rail">
-            {cards.map((card, index) => (
+            {newsCards.map((card, index) => (
               <article class="news-card" id={card.id}>
                 <header class="news-card-header">
                   <h3 class="news-card-title">{card.title ?? news[index] ?? ""}</h3>

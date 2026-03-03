@@ -6,6 +6,18 @@ import { getSiteContent } from "../lib/siteContent";
 const content = await getSiteContent();
 const releaseList = content.releaseList;
 const cards = content.releaseCards;
+const releaseCards = cards.length
+  ? cards.map((card, index) => ({
+      ...card,
+      title: releaseList[index] ?? "",
+    }))
+  : releaseList.map((title, index) => ({
+      id: `release-${index}`,
+      title,
+      image: null,
+      credits: [],
+      body: "",
+    }));
 ---
 
 <BaseLayout title="15 love — Releases">
@@ -30,19 +42,24 @@ const cards = content.releaseCards;
       <section class="releases-rail-box" aria-label="Releases horizontal feed">
         <div class="releases-rail-scroll">
           <div class="releases-rail">
-            {cards.map((card) => (
+            {releaseCards.map((card) => (
               <article class="release-card" id={card.id}>
                 <div class="release-post">
-                  <img
-                    class="release-image"
-                    src={card.image.src}
-                    alt={card.image.alt}
-                    width="340"
-                    height="340"
-                    loading="lazy"
-                    decoding="async"
-                  />
+                  {card.image ? (
+                    <img
+                      class="release-image"
+                      src={card.image.src}
+                      alt={card.image.alt}
+                      width="340"
+                      height="340"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <div class="release-image release-image-empty" aria-hidden="true"></div>
+                  )}
                   <div class="release-meta">
+                    {card.title ? <h3 class="release-title">{card.title}</h3> : null}
                     <div class="release-credits" aria-label="Release credits">
                       {card.credits.map((c) => (
                         <div class="credit-line">
@@ -124,6 +141,18 @@ const cards = content.releaseCards;
   .release-meta {
     min-width: 320px;
     width: 320px;
+  }
+
+  .release-title {
+    margin: 0 0 12px;
+    font-size: 22px;
+    line-height: 1.2;
+    font-weight: 400;
+  }
+
+  .release-image-empty {
+    border: 1px solid #000;
+    background: transparent;
   }
 
   .release-credits {
