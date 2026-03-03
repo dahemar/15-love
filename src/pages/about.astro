@@ -1,11 +1,58 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
-import HomeColumns from "../components/HomeColumns.astro";
+import { getSiteContent } from "../lib/siteContent";
+
+const content = await getSiteContent();
+const aboutText = content.about.text;
+const backgroundImage = content.about.backgroundImage;
 ---
 
 <BaseLayout title="15 love — About">
   <SiteShell activeTab="about">
-    <HomeColumns />
+    <div slot="center" class="about-center">
+      {backgroundImage ? <img class="about-bg" src={backgroundImage.src} alt={backgroundImage.alt} /> : null}
+      <section class="about-content" aria-label="About text">
+        <p>{aboutText}</p>
+      </section>
+    </div>
   </SiteShell>
 </BaseLayout>
+
+<style>
+  .about-center {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .about-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
+  .about-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    max-width: 760px;
+    padding: 24px;
+  }
+
+  .about-content p {
+    margin: 0;
+    white-space: pre-line;
+    font-family: "TT2020 Style E", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 34px;
+    line-height: 1.15;
+    letter-spacing: 0.2px;
+  }
+</style>

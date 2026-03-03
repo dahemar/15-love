@@ -46,6 +46,21 @@ function parseImage(value: unknown): { src: string; alt: string } | null {
   };
 }
 
+function parseUploadedImage(value: unknown, strapiBase: string): { src: string; alt: string } | null {
+  if (!value || typeof value !== "object") return null;
+  const src = value as Record<string, unknown>;
+  const rawUrl = typeof src.url === "string" ? src.url : null;
+  if (!rawUrl) return null;
+
+  return {
+    src: rawUrl.startsWith("/") ? `${strapiBase}${rawUrl}` : rawUrl,
+    alt:
+      typeof src.alternativeText === "string" && src.alternativeText.trim().length > 0
+        ? src.alternativeText.trim()
+        : "Background image",
+  };
+}
+
 function parseImageArray(value: unknown): { src: string; alt: string }[] {
   if (!Array.isArray(value)) return [];
   return value.map(parseImage).filter((item): item is { src: string; alt: string } => Boolean(item));
@@ -306,6 +321,13 @@ function mergeContent(raw: unknown): SiteContent {
     releaseCards: pickObjectArray(src.releaseCards, localSiteContent.releaseCards),
     eventPosts: [],
     homeFeedPosts: [],
+    about: {
+      text:
+        typeof src.aboutText === "string" && src.aboutText.trim().length > 0
+          ? src.aboutText
+          : localSiteContent.about.text,
+      backgroundImage: null,
+    },
   };
 }
 
@@ -323,7 +345,7 @@ export async function getSiteContent(): Promise<SiteContent> {
   if (!STRAPI_URL) return localSiteContent;
 
   const baseUrl = STRAPI_URL.replace(/\/+$/, "");
-  const siteContentEndpoint = `${baseUrl}/api/site-content`;
+  const siteContentEndpoint = `${baseUrl}/api/site-content?populate[aboutBackground]=*`;
   const postsEndpoint = `${baseUrl}/api/posts?sort[0]=publishedAt:desc&pagination[pageSize]=200&populate[eventBlocks][populate]=*`;
   const headers = {
     ...(STRAPI_TOKEN ? { Authorization: `Bearer ${STRAPI_TOKEN}` } : {}),
@@ -341,9 +363,15 @@ export async function getSiteContent(): Promise<SiteContent> {
       }),
     ]);
 
-    const base = siteContentResponse.ok
-      ? mergeContent(normalizeStrapiPayload(await siteContentResponse.json()))
-      : localSiteContent;
+    const normalizedSiteContent = siteContentResponse.ok
+      ? normalizeStrapiPayload(await siteContentResponse.json())
+      : null;
+
+    const base = normalizedSiteContent ? mergeContent(normalizedSiteContent) : localSiteContent;
+
+    const aboutBackground = normalizedSiteContent
+      ? parseUploadedImage((normalizedSiteContent as Record<string, unknown>).aboutBackground, baseUrl)
+      : null;
 
     if (!postsResponse.ok) {
       return base;
@@ -397,6 +425,10 @@ export async function getSiteContent(): Promise<SiteContent> {
       releaseCards: releaseCardsFromPosts.length ? releaseCardsFromPosts : base.releaseCards,
       eventPosts: eventPostsFromStrapi,
       homeFeedPosts: homeFeedPostsFromStrapi,
+      about: {
+        ...base.about,
+        backgroundImage: aboutBackground,
+      },
     };
   } catch {
     return localSiteContent;

@@ -60,6 +60,11 @@ export type HomeFeedPost = {
   href: string;
 };
 
+export type AboutContent = {
+  text: string;
+  backgroundImage: { src: string; alt: string } | null;
+};
+
 export type SiteContent = {
   newsList: string[];
   eventsList: string[];
@@ -69,6 +74,7 @@ export type SiteContent = {
   releaseCards: ReleaseCard[];
   eventPosts: EventPost[];
   homeFeedPosts: HomeFeedPost[];
+  about: AboutContent;
 };
 
 const loremContinuous =
@@ -168,4 +174,12 @@ export const localSiteContent: SiteContent = {
   ],
   eventPosts: [],
   homeFeedPosts: [],
+  about: {
+    text: `15 love is a record label
+based in copenhagen, denmark
+to get in touch, send an e-mail to
+info@15love.dk
+looking forward to hearing from you`,
+    backgroundImage: null,
+  },
 };

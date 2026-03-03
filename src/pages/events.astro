@@ -1,11 +1,187 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
-import HomeColumns from "../components/HomeColumns.astro";
+import { getSiteContent } from "../lib/siteContent";
+
+const content = await getSiteContent();
+const eventList = content.eventsList;
+
+const eventCards = content.eventPosts.map((post, index) => {
+  const details = post.eventBlocks.find((b) => b.__component === "events.details");
+  const richBlocks = post.eventBlocks.filter((b) => b.__component === "events.rich-text");
+  const mediaBlocks = post.eventBlocks.filter((b) => b.__component === "events.media" && b.image);
+
+  const title = details?.headline || post.title;
+  const bodyFromBlocks = richBlocks.map((b) => b.body || "").filter(Boolean).join("\n\n");
+  const body = bodyFromBlocks || details?.description || post.body || "";
+  const image = mediaBlocks.length ? mediaBlocks[0].image : null;
+
+  return {
+    id: post.id,
+    title,
+    body,
+    image,
+    venue: details?.venue || "",
+    dateLabel: details?.dateLabel || "",
+    fallbackTitle: eventList[index] || post.title,
+  };
+});
+
+const cards = eventCards.length
+  ? eventCards
+  : eventList.map((title, index) => ({
+      id: `event-${index}`,
+      title,
+      body: "",
+      image: null,
+      venue: "",
+      dateLabel: "",
+      fallbackTitle: title,
+    }));
 ---
 
 <BaseLayout title="15 love — Events">
   <SiteShell activeTab="events">
-    <HomeColumns />
+    <div slot="left" class="colblock colblock-left events-left">
+      <section class="block block-events-list">
+        <div class="blockhead">
+          <h2 class="coltitle">events</h2>
+        </div>
+        <ul class="list">
+          {eventList.map((item) => (
+            <li class="li">
+              <span class="heart">♡</span>
+              <span class="text">{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+
+    <div slot="center" class="events-wide">
+      <section class="events-rail-box" aria-label="Events horizontal feed">
+        <div class="events-rail-scroll">
+          <div class="events-rail">
+            {cards.map((card) => (
+              <article class="event-card" id={card.id}>
+                <div class="event-post">
+                  {card.image ? (
+                    <img
+                      class="event-image"
+                      src={card.image.url}
+                      alt={card.image.alt}
+                      width="520"
+                      height="340"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <div class="event-image event-image-empty" aria-hidden="true"></div>
+                  )}
+
+                  <div class="event-meta">
+                    <h3 class="event-title">{card.title || card.fallbackTitle}</h3>
+                    {card.venue || card.dateLabel ? (
+                      <p class="event-subline">{[card.venue, card.dateLabel].filter(Boolean).join(" — ")}</p>
+                    ) : null}
+                    <p class="event-body">{card.body}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
   </SiteShell>
 </BaseLayout>
+
+<style>
+  .events-left {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .events-left .block-events-list {
+    flex: 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .events-wide {
+    height: 100%;
+  }
+
+  .events-rail-box {
+    border: 1px solid #000;
+    height: 100%;
+    background: #fff;
+  }
+
+  .events-rail-scroll {
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .events-rail {
+    min-height: 100%;
+    width: max-content;
+    display: flex;
+  }
+
+  .event-card {
+    width: 860px;
+    min-height: 100%;
+    border-right: 1px solid #000;
+    padding: 12px;
+    display: block;
+  }
+
+  .event-post {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .event-image {
+    width: 520px;
+    max-width: 100%;
+    height: 340px;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+  }
+
+  .event-image-empty {
+    border: 1px solid #000;
+    background: transparent;
+  }
+
+  .event-meta {
+    max-width: 520px;
+  }
+
+  .event-title {
+    margin: 0 0 10px;
+    font-size: 22px;
+    line-height: 1.2;
+    font-weight: 400;
+  }
+
+  .event-subline {
+    margin: 0 0 12px;
+    font-size: 16px;
+    line-height: 1.2;
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .event-body {
+    margin: 0;
+    font-size: 15.4px;
+    line-height: 1.25;
+    white-space: pre-line;
+  }
+</style>
