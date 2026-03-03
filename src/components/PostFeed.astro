@@ -4,9 +4,10 @@ import type { EventPost, EventDetailsBlock, EventRichTextBlock, EventMediaBlock 
 
 interface Props {
   eventPosts?: EventPost[];
+  fallbackTitles?: string[];
 }
 
-const { eventPosts = [] } = Astro.props;
+const { eventPosts = [], fallbackTitles = [] } = Astro.props;
 
 // ── Renderable post types ────────────────────────────────────────────────────
 
@@ -85,8 +86,15 @@ function eventPostToCard(post: EventPost): RenderPost {
     body: bodyText,
   };
 }
-// Render all event posts directly from Strapi.
-const postsToRender: RenderPost[] = eventPosts.map(eventPostToCard);
+
+const fallbackPosts: RenderPost[] = fallbackTitles.map((title, index) => ({
+  id: `fallback-${index}`,
+  kind: "text",
+  title,
+  body: "",
+}));
+
+const postsToRender: RenderPost[] = eventPosts.length ? eventPosts.map(eventPostToCard) : fallbackPosts;
 ---
 
 <div class="feed" aria-label="Posts">
