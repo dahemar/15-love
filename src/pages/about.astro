@@ -13,7 +13,9 @@ const backgroundImage = content.about.backgroundImage;
     <div slot="center" class="about-center">
       {backgroundImage ? <img class="about-bg" src={backgroundImage.src} alt={backgroundImage.alt} /> : null}
       <section class="about-content" aria-label="About text">
-        <p>{aboutText}</p>
+        <div class="about-oval">
+          <p>{aboutText}</p>
+        </div>
       </section>
     </div>
   </SiteShell>
@@ -43,16 +45,21 @@ const backgroundImage = content.about.backgroundImage;
     position: relative;
     z-index: 1;
     text-align: center;
-    max-width: 760px;
-    padding: 24px;
+  }
+
+  .about-oval {
+    display: inline-block;
+    border: 6px solid #1d1d1b;
+    border-radius: 50%;
+    padding: 72px 120px;
   }
 
   .about-content p {
     margin: 0;
     white-space: pre-line;
-    font-family: "TT2020 Style E", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    font-size: 34px;
-    line-height: 1.15;
-    letter-spacing: 0.2px;
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 26px;
+    line-height: 1.55;
+    letter-spacing: 0;
   }
 </style>
