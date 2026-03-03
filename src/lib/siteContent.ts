@@ -1,4 +1,4 @@
-import { localSiteContent, type SiteContent, type EventPost, type EventBlock } from "../data/siteContent";
+import { localSiteContent, type SiteContent, type EventPost, type EventBlock, type HomeFeedPost } from "../data/siteContent";
 
 const CMS_MODE = (import.meta.env.CMS_MODE ?? "local").toLowerCase();
 const STRAPI_URL = import.meta.env.STRAPI_URL;
@@ -22,6 +22,7 @@ type PostRecord = {
   title: string;
   category: PostCategory;
   body?: string;
+  publishedAt?: string;
   images?: unknown;
   image?: unknown;
   credits?: unknown;
@@ -75,6 +76,97 @@ function parseMediaImagesFromEventBlocks(value: unknown, strapiBase: string): { 
     .filter((item): item is { src: string; alt: string } => Boolean(item));
 }
 
+function parseLeadingMediaImagesFromEventBlocks(value: unknown, strapiBase: string, limit = 2): { src: string; alt: string }[] {
+  if (!Array.isArray(value)) return [];
+
+  const images: { src: string; alt: string }[] = [];
+  for (const block of value) {
+    if (!block || typeof block !== "object") break;
+    const src = block as Record<string, unknown>;
+    if (src.__component !== "events.media") break;
+
+    const image = src.image as Record<string, unknown> | null | undefined;
+    if (!image || typeof image !== "object") continue;
+
+    const rawUrl = typeof image.url === "string" ? image.url : null;
+    if (!rawUrl) continue;
+
+    images.push({
+      src: rawUrl.startsWith("/") ? `${strapiBase}${rawUrl}` : rawUrl,
+      alt:
+        typeof image.alternativeText === "string" && image.alternativeText.trim().length > 0
+          ? image.alternativeText.trim()
+          : "Image",
+    });
+
+    if (images.length >= limit) break;
+  }
+
+  return images;
+}
+
+function stripText(value: string): string {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function buildExcerpt(value: string, maxLength = 220): string {
+  const clean = stripText(value);
+  if (clean.length <= maxLength) return clean;
+  return `${clean.slice(0, maxLength).trimEnd()}`;
+}
+
+function parseBodyFromEventBlocks(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  const parts: string[] = [];
+
+  for (const block of value) {
+    if (!block || typeof block !== "object") continue;
+    const src = block as Record<string, unknown>;
+    const component = src.__component;
+
+    if (component === "events.rich-text") {
+      const body = typeof src.body === "string" ? src.body : "";
+      if (body) parts.push(body);
+    }
+
+    if (component === "events.details") {
+      const description = typeof src.description === "string" ? src.description : "";
+      if (description) parts.push(description);
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
+function buildHomeFeedPosts(posts: PostRecord[], strapiBase: string, limit = 200): HomeFeedPost[] {
+  return posts.slice(0, limit).map((post) => {
+    const legacyImages = parseImageArray(post.images);
+    const leadingMediaImages = parseLeadingMediaImagesFromEventBlocks(post.eventBlocks, strapiBase, 2);
+
+    let images: { src: string; alt: string }[] = [];
+    if (post.category === "releases") {
+      const releaseImage = parseImage(post.image);
+      images = releaseImage ? [releaseImage] : [];
+    } else if (legacyImages.length) {
+      images = legacyImages.slice(0, 2);
+    } else if (leadingMediaImages.length) {
+      images = leadingMediaImages;
+    }
+
+    const eventBlockBody = parseBodyFromEventBlocks(post.eventBlocks);
+    const textSource = post.body && post.body.trim().length > 0 ? post.body : eventBlockBody;
+
+    return {
+      id: post.id,
+      category: post.category,
+      title: post.title,
+      excerpt: buildExcerpt(textSource || post.title),
+      images,
+      href: `/${post.category}#${post.id}`,
+    };
+  });
+}
+
 function parseCredits(value: unknown): { label: string; value: string }[] {
   if (!Array.isArray(value)) return [];
   const credits = value
@@ -97,7 +189,13 @@ function parsePosts(items: unknown[]): PostRecord[] {
     const src = parseStrapiEntity(item);
     const category = src.category;
     const title = src.title;
-    if ((category !== "news" && category !== "events" && category !== "releases") || typeof title !== "string" || !title.trim()) {
+    const publishedAt = typeof src.publishedAt === "string" ? src.publishedAt : "";
+    if (
+      (category !== "news" && category !== "events" && category !== "releases") ||
+      typeof title !== "string" ||
+      !title.trim() ||
+      !publishedAt
+    ) {
       continue;
     }
 
@@ -107,6 +205,7 @@ function parsePosts(items: unknown[]): PostRecord[] {
       title: title.trim(),
       category,
       body: typeof src.body === "string" ? src.body : undefined,
+      publishedAt,
       images: src.images,
       image: src.image,
       credits: src.credits,
@@ -206,6 +305,7 @@ function mergeContent(raw: unknown): SiteContent {
     releaseList: pickStringArray(src.releaseList, localSiteContent.releaseList),
     releaseCards: pickObjectArray(src.releaseCards, localSiteContent.releaseCards),
     eventPosts: [],
+    homeFeedPosts: [],
   };
 }
 
@@ -275,20 +375,18 @@ export async function getSiteContent(): Promise<SiteContent> {
         };
       });
 
-    const releaseCardsFromPosts = buckets.releases
-      .map((post) => {
-        const image = parseImage(post.image);
-        if (!image) return null;
-        return {
-          id: post.id,
-          image,
-          credits: parseCredits(post.credits),
-          body: typeof post.body === "string" ? post.body : "",
-        };
-      })
-      .filter((item): item is SiteContent["releaseCards"][number] => Boolean(item));
+    const releaseCardsFromPosts = buckets.releases.map((post) => {
+      const image = parseImage(post.image);
+      return {
+        id: post.id,
+        image,
+        credits: parseCredits(post.credits),
+        body: typeof post.body === "string" ? post.body : "",
+      };
+    });
 
     const eventPostsFromStrapi = parseEventPosts(buckets.events, baseUrl);
+    const homeFeedPostsFromStrapi = buildHomeFeedPosts(posts, baseUrl);
 
     return {
       ...base,
@@ -298,6 +396,7 @@ export async function getSiteContent(): Promise<SiteContent> {
       newsCards: newsCardsFromPosts.length ? newsCardsFromPosts : newsCardsWithTitles,
       releaseCards: releaseCardsFromPosts.length ? releaseCardsFromPosts : base.releaseCards,
       eventPosts: eventPostsFromStrapi,
+      homeFeedPosts: homeFeedPostsFromStrapi,
     };
   } catch {
     return localSiteContent;

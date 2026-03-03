@@ -1,171 +1,46 @@
 ---
 import TennisButton from "./TennisButton.astro";
-import type { EventPost, EventDetailsBlock, EventRichTextBlock, EventMediaBlock } from "../data/siteContent";
+import type { HomeFeedPost } from "../data/siteContent";
 
 interface Props {
-  eventPosts?: EventPost[];
-  fallbackTitles?: string[];
+  posts?: HomeFeedPost[];
 }
 
-const { eventPosts = [], fallbackTitles = [] } = Astro.props;
+const { posts = [] } = Astro.props;
 
-// ── Renderable post types ────────────────────────────────────────────────────
-
-type RenderPost =
-  | {
-      id: string;
-      kind: "text";
-      title?: string;
-      body: string;
-    }
-  | {
-      id: string;
-      kind: "image-left" | "image-right";
-      imageSrc: string;
-      imageAlt: string;
-      caption?: string;
-      body?: string;
-      credits?: Array<{ label: string; value: string }>;
-      details?: { headline: string; venue?: string; dateLabel?: string };
-    }
-  | {
-      id: string;
-      kind: "gallery";
-      body: string;
-      images: Array<{ src: string; alt: string }>;
-    };
-
-// ── Map Strapi EventPost → RenderPost ───────────────────────────────────────
-
-function eventPostToCard(post: EventPost): RenderPost {
-  const mediaBlocks = post.eventBlocks.filter(
-    (b): b is EventMediaBlock => b.__component === "events.media" && b.image !== null,
-  );
-  const richBlocks = post.eventBlocks.filter(
-    (b): b is EventRichTextBlock => b.__component === "events.rich-text",
-  );
-  const detailsBlock = post.eventBlocks.find(
-    (b): b is EventDetailsBlock => b.__component === "events.details",
-  );
-
-  const bodyText =
-    richBlocks
-      .map((b) => b.body ?? "")
-      .filter(Boolean)
-      .join("\n\n") ||
-    detailsBlock?.description ||
-    post.body ||
-    "";
-
-  const imagesWithUrl = mediaBlocks.filter((m) => m.image !== null);
-
-  if (imagesWithUrl.length === 0) {
-    return { id: post.id, kind: "text", title: detailsBlock?.headline, body: bodyText };
-  }
-
-  if (imagesWithUrl.length === 1) {
-    const m = imagesWithUrl[0];
-    return {
-      id: post.id,
-      kind: m.imagePosition === "right" ? "image-right" : "image-left",
-      imageSrc: m.image!.url,
-      imageAlt: m.image!.alt,
-      caption: m.caption,
-      body: bodyText || undefined,
-      details: detailsBlock
-        ? { headline: detailsBlock.headline, venue: detailsBlock.venue, dateLabel: detailsBlock.dateLabel }
-        : undefined,
-    };
-  }
-
-  // 2+ images → gallery
-  return {
-    id: post.id,
-    kind: "gallery",
-    images: imagesWithUrl.map((m) => ({ src: m.image!.url, alt: m.image!.alt })),
-    body: bodyText,
-  };
+function withEllipsis(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length ? `${trimmed}…` : "…";
 }
-
-const fallbackPosts: RenderPost[] = fallbackTitles.map((title, index) => ({
-  id: `fallback-${index}`,
-  kind: "text",
-  title,
-  body: "",
-}));
-
-const postsToRender: RenderPost[] = eventPosts.length ? eventPosts.map(eventPostToCard) : fallbackPosts;
 ---
 
-<div class="feed" aria-label="Posts">
-  {postsToRender.map((p, i) => (
-    <article class={"card kind-" + p.kind} id={p.id}>
-      <div class="content">
-        {p.kind === "text" ? (
-          <>
-            {(p as any).title ? <h3 class="postTitle">{(p as any).title}</h3> : null}
-            <p class="body">{p.body}</p>
-          </>
+<div class="feed" aria-label="Latest posts preview">
+  {posts.map((post, index) => (
+    <article class="card" id={post.id}>
+      <div class={post.images.length ? "content has-media" : "content"}>
+        {post.images.length > 0 ? (
+          <div class="mediaCol">
+            {post.images.slice(0, 2).map((image) => (
+              <img
+                class="thumb"
+                src={image.src}
+                alt={image.alt}
+                loading={index === 0 ? "eager" : "lazy"}
+                decoding="async"
+                width="120"
+                height="120"
+              />
+            ))}
+          </div>
         ) : null}
 
-        {(p.kind === "image-left" || p.kind === "image-right") ? (
-          <>
-            <img
-              class="media"
-              src={p.imageSrc}
-              alt={p.imageAlt}
-              width="180"
-              height="180"
-              loading={i === 0 ? "eager" : "lazy"}
-              decoding="async"
-              fetchpriority={i === 0 ? "high" : undefined}
-            />
-            <div class="textSide">
-              {p.credits ? (
-                <div class="credits" aria-label="Credits">
-                  {p.credits.map((c) => (
-                    <div class="creditLine">
-                      <span class="creditLabel">{c.label}</span> <span class="creditValue">{c.value}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : p.details ? (
-                <div class="credits" aria-label="Event details">
-                  <div class="creditLine detailHeadline">
-                    <span class="creditValue">{p.details.headline}</span>
-                  </div>
-                  {p.details.venue ? (
-                    <div class="creditLine">
-                      <span class="creditLabel">Venue:</span>{" "}
-                      <span class="creditValue">{p.details.venue}</span>
-                    </div>
-                  ) : null}
-                  {p.details.dateLabel ? (
-                    <div class="creditLine">
-                      <span class="creditLabel">Date:</span>{" "}
-                      <span class="creditValue">{p.details.dateLabel}</span>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {p.body ? <p class="body">{p.body}</p> : null}
-              {p.caption ? <p class="caption">{p.caption}</p> : null}
-            </div>
-          </>
-        ) : null}
-
-        {p.kind === "gallery" ? (
-          <>
-            <div class="gallery">
-              {p.images.map((img) => (
-                <img class="thumb" src={img.src} alt={img.alt} loading="lazy" decoding="async" width="180" height="180" />
-              ))}
-            </div>
-            <p class="body">{p.body}</p>
-          </>
-        ) : null}
+        <div class="textCol">
+          <h3 class="title">{post.title}</h3>
+          <p class="body">{withEllipsis(post.excerpt)}</p>
+        </div>
       </div>
-      <TennisButton class="card-tennis" href={`#${p.id}`} label="Jump to this post" />
+
+      <TennisButton class="card-tennis" href={post.href} label={`Go to ${post.category} post`} />
     </article>
   ))}
 </div>
@@ -184,13 +59,13 @@ const postsToRender: RenderPost[] = eventPosts.length ? eventPosts.map(eventPost
     border-right: none;
     border-top: 1px solid #000;
     border-bottom: none;
-    padding: 14px;
+    padding: 12px;
     padding-right: 52px;
-    padding-bottom: 48px;
+    padding-bottom: 44px;
     display: block;
     background: #fff;
     content-visibility: auto;
-    contain-intrinsic-size: 260px;
+    contain-intrinsic-size: 240px;
   }
 
   .card:first-child {
@@ -201,9 +76,41 @@ const postsToRender: RenderPost[] = eventPosts.length ? eventPosts.map(eventPost
     min-width: 0;
   }
 
+  .content.has-media {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .mediaCol {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .thumb {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+  }
+
+  .textCol {
+    min-width: 0;
+  }
+
+  .title {
+    margin: 0 0 8px;
+    font-size: 16px;
+    line-height: 1.25;
+    font-weight: 600;
+  }
+
   .body {
     margin: 0;
-    font-size: 15.4px; /* +10% */
+    font-size: 15px;
     line-height: 1.25;
     white-space: pre-line;
   }
@@ -213,93 +120,5 @@ const postsToRender: RenderPost[] = eventPosts.length ? eventPosts.map(eventPost
     position: absolute;
     right: 12px;
     bottom: 12px;
-  }
-
-  .kind-image-left .content,
-  .kind-image-right .content {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    gap: 14px;
-    align-items: start;
-  }
-
-  .kind-image-right .content {
-    grid-template-columns: 1fr 180px;
-  }
-
-  /* For gallery posts: thumbnails in left column, text on the right */
-  .kind-gallery .content {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    gap: 14px;
-    align-items: start;
-  }
-
-  .media {
-    width: 180px;
-    height: 180px;
-    object-fit: cover;
-    border: 1px solid #000;
-  }
-
-  .credits {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 15.4px; /* +10% */
-    line-height: 1.25;
-  }
-
-  .creditLabel {
-    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    letter-spacing: 0.2px;
-  }
-
-  .gallery {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 0;
-  }
-
-  .thumb {
-    width: 180px;
-    height: 180px;
-    object-fit: cover;
-    border: 1px solid #000;
-    display: block;
-  }
-
-  /* ── Dynamic / Strapi-sourced content ─────────────────────────────────── */
-
-  .textSide {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  /* Reorder image to second column for image-right layout */
-  .kind-image-right .media {
-    order: 2;
-  }
-
-  .postTitle {
-    margin: 0;
-    font-size: 15.4px;
-    font-weight: 600;
-    line-height: 1.25;
-  }
-
-  .detailHeadline .creditValue {
-    font-weight: 600;
-  }
-
-  .caption {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.25;
-    color: #555;
-    font-style: italic;
   }
 </style>

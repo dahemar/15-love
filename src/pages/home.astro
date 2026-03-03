@@ -9,7 +9,7 @@ const content = await getSiteContent();
 const news = content.newsList.slice(0, 9);
 const events = content.eventsList.slice(0, 9);
 const releases = content.releaseList.slice(0, 9);
-const eventPosts = content.eventPosts ?? [];
+const homeFeedPosts = content.homeFeedPosts ?? [];
 ---
 
 <BaseLayout title="15 love — Home">
@@ -41,7 +41,7 @@ const eventPosts = content.eventPosts ?? [];
     </div>
 
     <div slot="center" class="center">
-      <PostFeed eventPosts={eventPosts} fallbackTitles={events} />
+      <PostFeed posts={homeFeedPosts} />
     </div>
 
     <div slot="right" class="colblock colblock-right">

@@ -46,9 +46,18 @@ export type ReleaseCredit = { label: string; value: string };
 
 export type ReleaseCard = {
   id: string;
-  image: { src: string; alt: string };
+  image: { src: string; alt: string } | null;
   credits: ReleaseCredit[];
   body: string;
+};
+
+export type HomeFeedPost = {
+  id: string;
+  category: "news" | "events" | "releases";
+  title: string;
+  excerpt: string;
+  images: NewsImage[];
+  href: string;
 };
 
 export type SiteContent = {
@@ -59,6 +68,7 @@ export type SiteContent = {
   releaseList: string[];
   releaseCards: ReleaseCard[];
   eventPosts: EventPost[];
+  homeFeedPosts: HomeFeedPost[];
 };
 
 const loremContinuous =
@@ -157,4 +167,5 @@ export const localSiteContent: SiteContent = {
     },
   ],
   eventPosts: [],
+  homeFeedPosts: [],
 };
