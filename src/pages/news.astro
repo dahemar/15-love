@@ -150,41 +150,34 @@ function mediaDimensions(size: "narrow" | "medium" | "wide") {
     };
 
     const markColumnFlow = (colWidth) => {
-      const flowItems = stream.querySelectorAll(".news-entry-start, .news-entry-body");
-
-      flowItems.forEach((element) => {
-        element.classList.remove("is-column-continue", "is-flow-hidden");
-      });
-
-      const streamRect = stream.getBoundingClientRect();
-      const columns = new Map();
-
-      for (const element of flowItems) {
+      const getColumnIndex = (element, streamRect) => {
         const rect = element.getBoundingClientRect();
-        if (rect.width <= 0) continue;
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return Math.round((rect.left - streamRect.left) / (colWidth + 1));
+      };
 
-        const columnIndex = Math.round((rect.left - streamRect.left) / (colWidth + 1));
-        if (!columns.has(columnIndex)) columns.set(columnIndex, []);
-        columns.get(columnIndex).push({ element, rect });
-      }
+      const entries = stream.querySelectorAll(".news-entry");
+      const streamRect = stream.getBoundingClientRect();
 
-      for (const items of columns.values()) {
-        items.sort((a, b) => a.rect.top - b.rect.top);
+      entries.forEach((entry) => {
+        const start = entry.querySelector(".news-entry-start");
+        const body = entry.querySelector(".news-entry-body");
+        if (!body) return;
 
-        const first = items[0];
-        if (!first) continue;
+        body.classList.remove("is-column-continue");
 
-        if (first.element.classList.contains("news-entry-body")) {
-          first.element.classList.add("is-column-continue");
+        if (!start) return;
+
+        const startCol = getColumnIndex(start, streamRect);
+        const bodyCol = getColumnIndex(body, streamRect);
+        if (startCol == null || bodyCol == null) return;
+
+        // If the title lands in a previous column, add breathing room
+        // at the top of the continuation body in the next column.
+        if (bodyCol > startCol) {
+          body.classList.add("is-column-continue");
         }
-
-        const orphanStart = items.find(
-          (item) =>
-            item.element.classList.contains("news-entry-start") &&
-            item.rect.height < 4,
-        );
-        if (orphanStart) orphanStart.element.classList.add("is-flow-hidden");
-      }
+      });
     };
 
     const schedule = () => requestAnimationFrame(layout);
@@ -276,7 +269,7 @@ function mediaDimensions(size: "narrow" | "medium" | "wide") {
     padding: 0 var(--news-column-padding-x);
     margin: 0;
     box-sizing: border-box;
-    break-before: avoid;
+    break-before: auto;
   }
 
   .news-entry-body::after {
@@ -286,7 +279,7 @@ function mediaDimensions(size: "narrow" | "medium" | "wide") {
   }
 
   .news-entry-body.is-column-continue {
-    padding-top: 16px;
+    padding-top: 12px;
   }
 
   .news-entry:not(:last-child) .news-entry-body {
@@ -294,10 +287,6 @@ function mediaDimensions(size: "narrow" | "medium" | "wide") {
     border-bottom: 1px solid #000;
     -webkit-box-decoration-break: slice;
     box-decoration-break: slice;
-  }
-
-  .news-entry-start.is-flow-hidden {
-    display: none;
   }
 
   .news-entry-link,
