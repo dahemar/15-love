@@ -7,7 +7,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "cms:check": "node ./scripts/strapi-check.mjs"
+    "cms:check": "node --env-file=.env ./scripts/strapi-check.mjs"
   },
   "dependencies": {
     "astro": "^5.17.1"

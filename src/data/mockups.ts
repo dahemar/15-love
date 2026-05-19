@@ -35,7 +35,7 @@ const footerHotspots: Hotspot[] = [
 export const mockups: Record<string, Mockup> = {
   splash: {
     title: "15 love — Splash",
-    image: "/mockups/page-03.png",
+    image: "/mockups/page-03.jpg",
     size: { width: 1920, height: 1080 },
     hotspots: [
       {
@@ -47,31 +47,31 @@ export const mockups: Record<string, Mockup> = {
   },
   home: {
     title: "15 love — Home",
-    image: "/mockups/page-08.png",
+    image: "/mockups/page-08.jpg",
     size: { width: 1920, height: 1080 },
     hotspots: [...navHotspots, ...footerHotspots],
   },
   news: {
     title: "15 love — News",
-    image: "/mockups/page-17.png",
+    image: "/mockups/page-17.jpg",
     size: { width: 1920, height: 1080 },
     hotspots: [...navHotspots, ...footerHotspots],
   },
   releases: {
     title: "15 love — Releases",
-    image: "/mockups/page-21.png",
+    image: "/mockups/page-21.jpg",
     size: { width: 1920, height: 1080 },
     hotspots: [...navHotspots, ...footerHotspots],
   },
   events: {
     title: "15 love — Events",
-    image: "/mockups/page-24.png",
+    image: "/mockups/page-24.jpg",
     size: { width: 1920, height: 1080 },
     hotspots: [...navHotspots, ...footerHotspots],
   },
   about: {
     title: "15 love — About",
-    image: "/mockups/page-27.png",
+    image: "/mockups/page-27.jpg",
     size: { width: 1920, height: 1080 },
     hotspots: [...navHotspots, ...footerHotspots],
   },
@@ -83,7 +83,7 @@ export const mockups: Record<string, Mockup> = {
   },
   "m-home": {
     title: "15 love — Home (mobile mockup)",
-    image: "/mockups/page-30.png",
+    image: "/mockups/page-30.jpg",
     size: { width: 1080, height: 1920 },
     hotspots: [],
   },

@@ -1,23 +1,12 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
+import { getLocalThumbSrc } from "../lib/localAssetThumbs";
 import { getSiteContent } from "../lib/siteContent";
+import { getReleasePostViews } from "../lib/postViews";
 
 const content = await getSiteContent();
-const releaseList = content.releaseList;
-const cards = content.releaseCards;
-const releaseCards = cards.length
-  ? cards.map((card, index) => ({
-      ...card,
-      title: releaseList[index] ?? "",
-    }))
-  : releaseList.map((title, index) => ({
-      id: `release-${index}`,
-      title,
-      image: null,
-      credits: [],
-      body: "",
-    }));
+const releaseCards = getReleasePostViews(content);
 ---
 
 <BaseLayout title="15 love — Releases">
@@ -28,10 +17,10 @@ const releaseCards = cards.length
           <h2 class="coltitle">releases</h2>
         </div>
         <ul class="list">
-          {releaseList.map((item) => (
+          {releaseCards.map((item) => (
             <li class="li">
               <span class="heart">♡</span>
-              <span class="text">{item}</span>
+              <a class="text release-list-link" href={item.href} data-astro-prefetch="hover">{item.title}</a>
             </li>
           ))}
         </ul>
@@ -44,11 +33,11 @@ const releaseCards = cards.length
           <div class="releases-rail">
             {releaseCards.map((card) => (
               <article class="release-card" id={card.id}>
-                <div class="release-post">
+                <a class="release-post release-card-link" href={card.href} data-astro-prefetch="hover">
                   {card.image ? (
                     <img
                       class="release-image"
-                      src={card.image.src}
+                      src={getLocalThumbSrc(card.image.src)}
                       alt={card.image.alt}
                       width="340"
                       height="340"
@@ -67,9 +56,9 @@ const releaseCards = cards.length
                         </div>
                       ))}
                     </div>
-                    <p class="release-body">{card.body}</p>
+                    {card.body ? <p class="release-body">{card.body}</p> : null}
                   </div>
-                </div>
+                </a>
               </article>
             ))}
           </div>
@@ -128,6 +117,17 @@ const releaseCards = cards.length
     grid-template-columns: 340px 1fr;
     column-gap: 14px;
     align-items: start;
+  }
+
+  .release-card-link,
+  .release-list-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .release-card-link:hover .release-title,
+  .release-list-link:hover {
+    text-decoration: underline;
   }
 
   .release-image {

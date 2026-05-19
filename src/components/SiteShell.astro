@@ -27,11 +27,11 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
         </div>
 
         <nav class="topnav" aria-label="Primary">
-          <a class={"tab" + (activeTab === "home" ? " is-active" : "")} href="/home/">home</a><a class={"tab" + (activeTab === "news" ? " is-active" : "")} href="/news/">/news</a><a class={"tab" + (activeTab === "releases" ? " is-active" : "")} href="/releases/">/releases</a><a class={"tab" + (activeTab === "events" ? " is-active" : "")} href="/events/">/events</a><a class={"tab" + (activeTab === "about" ? " is-active" : "")} href="/about/">/about</a><a class={"tab" + (activeTab === "archive" ? " is-active" : "")} href="/archive/">/archive</a>
+          <a class={"tab" + (activeTab === "home" ? " is-active" : "")} href="/home/" data-astro-prefetch="load">home</a><a class={"tab" + (activeTab === "news" ? " is-active" : "")} href="/news/" data-astro-prefetch="load">/news</a><a class={"tab" + (activeTab === "releases" ? " is-active" : "")} href="/releases/" data-astro-prefetch="load">/releases</a><a class={"tab" + (activeTab === "events" ? " is-active" : "")} href="/events/" data-astro-prefetch="load">/events</a><a class={"tab" + (activeTab === "about" ? " is-active" : "")} href="/about/" data-astro-prefetch="load">/about</a><a class={"tab" + (activeTab === "archive" ? " is-active" : "")} href="/archive/" data-astro-prefetch="load">/archive</a>
         </nav>
       </header>
 
-      <div class={"frame" + (activeTab === "news" || activeTab === "releases" || activeTab === "events" ? " is-news-layout" : "") + (activeTab === "about" ? " is-about-layout" : "")}>
+      <div class={"frame" + (activeTab === "news" || activeTab === "releases" || activeTab === "events" ? " is-news-layout" : "") + (activeTab === "archive" ? " is-archive-layout" : "")}>
         <aside class="col col-left">
           <slot name="left" />
         </aside>
@@ -61,42 +61,23 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
 
 <script is:inline>
   (() => {
-    const viewport = document.querySelector('[data-viewport]');
-    const stage = document.querySelector('[data-stage]');
-    const surface = document.querySelector('[data-surface]');
-    if (!(viewport instanceof HTMLElement) || !(stage instanceof HTMLElement) || !(surface instanceof HTMLElement)) return;
-
-    const W = 1920;
-    const H = 1080;
-    surface.style.transformOrigin = 'top left';
-    surface.style.willChange = 'transform';
-
-    let raf = 0;
-    let lastScale = -1;
-
-    const measureAndApply = () => {
-      raf = 0;
-      const vw = viewport.clientWidth;
-      const vh = viewport.clientHeight;
-      const scale = Math.min(vw / W, vh / H);
-
-      // Avoid redundant style writes (helps during continuous resizes)
-      if (scale === lastScale) return;
-      lastScale = scale;
-
-      stage.style.width = `${W * scale}px`;
-      stage.style.height = `${H * scale}px`;
-      surface.style.transform = `scale(${scale})`;
+    var v = document.querySelector('[data-viewport]');
+    var g = document.querySelector('[data-stage]');
+    var s = document.querySelector('[data-surface]');
+    if (!v || !g || !s) return;
+    s.style.transformOrigin = 'top left';
+    var W = 1920, H = 1080, r = 0, l = -1;
+    var m = function() {
+      r = 0;
+      var k = Math.min(v.clientWidth / W, v.clientHeight / H);
+      if (k === l) return;
+      l = k;
+      g.style.width = (W * k) + 'px';
+      g.style.height = (H * k) + 'px';
+      s.style.transform = 'scale(' + k + ')';
     };
-
-    const schedule = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(measureAndApply);
-    };
-
-    const ro = new ResizeObserver(schedule);
-    ro.observe(viewport);
-    schedule();
+    new ResizeObserver(function() { if (!r) r = requestAnimationFrame(m); }).observe(v);
+    m();
   })();
 </script>
 
@@ -187,8 +168,8 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
     padding: 16px 4px 0; /* minimal horizontal padding to hug edges */
   }
 
-  /* News keeps the same base grid as home: left column dimensions stay identical.
-     The center column spans into the right column to create one wide horizontal area. */
+    /* Wide content pages keep the same left column dimensions as home while the
+      center column spans into the right column to create one horizontal panel. */
   .frame.is-news-layout .col-center {
     grid-column: 2 / 4;
     padding-left: 8px;
@@ -202,27 +183,30 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
   .frame.is-news-layout .center-scroll {
     border: none;
     padding-bottom: 0;
+    overflow: hidden;
   }
 
-  .frame.is-about-layout {
+  .frame.is-archive-layout {
     grid-template-columns: 1fr;
-    padding: 16px 0 0;
+    padding: 16px 4px 0;
   }
 
-  .frame.is-about-layout .col-left,
-  .frame.is-about-layout .col-right {
+  .frame.is-archive-layout .col-left,
+  .frame.is-archive-layout .col-right {
     display: none;
   }
 
-  .frame.is-about-layout .col-center {
+  .frame.is-archive-layout .col-center {
     grid-column: 1;
     padding: 0;
   }
 
-  .frame.is-about-layout .center-scroll {
+  .frame.is-archive-layout .center-scroll {
     border: none;
     padding: 0;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .col {
@@ -252,7 +236,7 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
     bottom: 0;
     width: 100%;
     height: 44px;
-    padding: 0 36px;
+    padding: 0 4px;
     display: flex;
     align-items: center;
     justify-content: space-between;

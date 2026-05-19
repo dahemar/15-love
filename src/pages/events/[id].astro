@@ -1,0 +1,235 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import SiteShell from "../../components/SiteShell.astro";
+import { getSiteContent } from "../../lib/siteContent";
+import { getEventPostViews } from "../../lib/postViews";
+
+export async function getStaticPaths() {
+  const content = await getSiteContent();
+  return getEventPostViews(content).flatMap((post) => {
+    const paths = [{ params: { id: post.id } }];
+    if (post.legacyId && post.legacyId !== post.id) {
+      paths.push({ params: { id: post.legacyId } });
+    }
+    return paths;
+  });
+}
+
+const content = await getSiteContent();
+const posts = getEventPostViews(content);
+const post = posts.find((entry) => entry.id === Astro.params.id || entry.legacyId === Astro.params.id);
+const backHref = "/events/";
+
+if (!post) {
+  throw new Error(`Unknown event post: ${Astro.params.id}`);
+}
+---
+
+<BaseLayout title={`15 love — ${post.title}`}>
+  <SiteShell activeTab="events">
+    <div slot="left" class="colblock colblock-left events-left">
+      <section class="block block-events-list">
+        <div class="blockhead">
+          <h2 class="coltitle">events</h2>
+        </div>
+        <ul class="list">
+          {posts.map((item) => (
+            <li class="li">
+              <span class="heart">♡</span>
+              <a class={`text event-list-link${item.id === post.id ? " is-active" : ""}`} href={item.href} data-astro-prefetch="hover">{item.title}</a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+
+    <div slot="center" class="events-wide">
+      <section class="events-detail-box" aria-label="Event detail">
+        <a
+          class="detail-back"
+          href={backHref}
+          aria-label="Back to events"
+          onclick={`if (window.history.length > 1) { window.history.back(); return false; }`}
+        >
+          <span aria-hidden="true">←</span>
+        </a>
+        <article class="event-detail">
+          {post.image ? (
+            <img
+              class="event-image"
+              src={post.image.url}
+              alt={post.image.alt}
+              width={post.image.width ?? 640}
+              height={post.image.height ?? 420}
+              loading="eager"
+              decoding="async"
+              fetchpriority="high"
+            />
+          ) : (
+            <div class="event-image event-image-empty" aria-hidden="true"></div>
+          )}
+
+          <div class="event-meta">
+            <p class="event-date">{post.dateLabel}</p>
+            <h1 class="event-title">{post.title}</h1>
+            {post.venue ? <p class="event-subline">{post.venue}</p> : null}
+            {post.body ? <p class="event-body">{post.body}</p> : null}
+          </div>
+          {post.tags && post.tags.length ? (
+            <footer class="post-tags">
+              <div class="tagsText tagsLinks">
+                {post.tags.map((tag, index) => (
+                  <>
+                    <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
+                    {index < post.tags.length - 1 ? <span>, </span> : null}
+                  </>
+                ))}
+              </div>
+            </footer>
+          ) : null}
+        </article>
+      </section>
+    </div>
+  </SiteShell>
+</BaseLayout>
+
+<style>
+  .events-left {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .events-left .block-events-list {
+    flex: 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .events-wide {
+    height: 100%;
+  }
+
+  .events-detail-box {
+    position: relative;
+    border: 1px solid #000;
+    height: 100%;
+    background: #fff;
+    overflow-y: auto;
+  }
+
+  .detail-back {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid #000;
+    background: #fff;
+    color: #000;
+    text-decoration: none;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .detail-back:hover {
+    background: #fff;
+  }
+
+  .event-detail {
+    padding: 12px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .event-image {
+    width: 640px;
+    max-width: 100%;
+    height: auto;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+  }
+
+  .event-image-empty {
+    min-height: 340px;
+    border: 1px solid #000;
+    background: transparent;
+  }
+
+  .event-meta {
+    width: min(100%, 760px);
+    padding-right: 56px;
+  }
+
+  .event-date {
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .event-title {
+    margin: 0 0 10px;
+    font-size: 24px;
+    line-height: 1.15;
+    font-weight: 400;
+    max-width: none;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: manual;
+  }
+
+  .event-subline {
+    margin: 0 0 12px;
+    font-size: 16px;
+    line-height: 1.2;
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .event-body {
+    margin: 0;
+    font-size: 15.4px;
+    line-height: 1.28;
+    white-space: pre-line;
+  }
+
+  .event-list-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .event-list-link:hover,
+  .event-list-link.is-active {
+    text-decoration: underline;
+  }
+
+  .post-tags {
+    margin-top: 4px;
+  }
+
+  .post-tags .tagsText {
+    display: inline-block;
+    margin-top: 0;
+    padding: 8px 10px;
+    border: 1px solid #000;
+    background: #fff;
+  }
+
+  .tagsLinks {
+    display: block;
+  }
+
+  .tagLink {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .tagLink:hover {
+    text-decoration: underline;
+  }
+</style>

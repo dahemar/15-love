@@ -2,12 +2,14 @@
 type Props = {
   href: string;
   label: string;
+  prefetch?: "hover" | "load" | "viewport" | "tap" | false;
+  class?: string;
 };
 
-const { href, label } = Astro.props;
+const { href, label, prefetch = "hover", class: className = "" } = Astro.props;
 ---
 
-<a class="tennis" href={href} aria-label={label}>
+<a class={`tennis ${className}`.trim()} href={href} aria-label={label} data-astro-prefetch={prefetch || undefined}>
   <img src="/assets/tennis.png" alt="" width="26" height="26" draggable="false" decoding="async" />
 </a>
 

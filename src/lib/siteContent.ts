@@ -1,8 +1,48 @@
-import { localSiteContent, type SiteContent, type EventPost, type EventBlock, type HomeFeedPost } from "../data/siteContent";
+import { localSiteContent, type SiteContent } from "../data/siteContent";
+import { getLocalThumbSrc } from "./localAssetThumbs";
+import { buildPostHref } from "./postRoutes";
 
 const CMS_MODE = (import.meta.env.CMS_MODE ?? "local").toLowerCase();
 const STRAPI_URL = import.meta.env.STRAPI_URL;
 const STRAPI_TOKEN = import.meta.env.STRAPI_TOKEN;
+const STRAPI_CACHE_TTL_MS = Number(import.meta.env.STRAPI_CACHE_TTL_MS ?? (import.meta.env.DEV ? "0" : "60000"));
+const STRAPI_DEV_BURST_CACHE_TTL_MS = Number(import.meta.env.STRAPI_DEV_BURST_CACHE_TTL_MS ?? "1000");
+
+let cachedStrapiContent: SiteContent | null = null;
+let cachedStrapiContentExpiresAt = 0;
+let inFlightStrapiContentRequest: Promise<SiteContent> | null = null;
+
+function getEffectiveStrapiCacheTtlMs(): number {
+  if (!import.meta.env.DEV) return Math.max(0, STRAPI_CACHE_TTL_MS);
+  if (STRAPI_CACHE_TTL_MS > 0) return STRAPI_CACHE_TTL_MS;
+  return Math.max(0, STRAPI_DEV_BURST_CACHE_TTL_MS);
+}
+
+async function refreshStrapiContent(): Promise<SiteContent> {
+  const content = await fetchStrapiSiteContent();
+  cachedStrapiContent = content;
+  cachedStrapiContentExpiresAt = Date.now() + getEffectiveStrapiCacheTtlMs();
+  return content;
+}
+
+function refreshStrapiContentInBackground() {
+  if (inFlightStrapiContentRequest) return;
+
+  inFlightStrapiContentRequest = refreshStrapiContent()
+    .catch((error) => {
+      console.warn("[15love] Background refresh from Strapi failed:", error instanceof Error ? error.message : String(error));
+      return cachedStrapiContent ?? withDerivedContent(localSiteContent);
+    })
+    .finally(() => {
+      inFlightStrapiContentRequest = null;
+    });
+}
+
+type PostCategory = "news" | "events" | "releases";
+type ArchiveEntry = SiteContent["archiveEntries"][number];
+type NewsPost = SiteContent["newsPosts"][number];
+type EventPost = SiteContent["eventPosts"][number];
+type ReleaseCard = SiteContent["releaseCards"][number];
 
 function pickStringArray(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) return fallback;
@@ -12,327 +52,947 @@ function pickStringArray(value: unknown, fallback: string[]): string[] {
 
 function pickObjectArray<T>(value: unknown, fallback: T[]): T[] {
   if (!Array.isArray(value)) return fallback;
-  return value as T[]; // respect empty arrays from Strapi (don't fall back)
+  return value.length ? (value as T[]) : fallback;
 }
-
-type PostCategory = "news" | "events" | "releases";
-
-type PostRecord = {
-  id: string;
-  title: string;
-  category: PostCategory;
-  body?: string;
-  publishedAt?: string;
-  images?: unknown;
-  image?: unknown;
-  credits?: unknown;
-  eventBlocks?: unknown[];
-};
 
 function parseStrapiEntity(item: any): Record<string, unknown> {
   if (!item || typeof item !== "object") return {};
+  if (item.data && typeof item.data === "object") return parseStrapiEntity(item.data);
   if (item.attributes && typeof item.attributes === "object") return item.attributes;
   return item as Record<string, unknown>;
 }
 
-function parseImage(value: unknown): { src: string; alt: string } | null {
-  if (!value || typeof value !== "object") return null;
-  const src = (value as any).src;
-  const alt = (value as any).alt;
-  if (typeof src !== "string" || src.trim().length === 0) return null;
-  return {
-    src: src.trim(),
-    alt: typeof alt === "string" && alt.trim().length > 0 ? alt.trim() : "Image",
-  };
+function normalizeCategory(value: unknown): PostCategory | null {
+  if (value === "news" || value === "events" || value === "releases") return value;
+  return null;
 }
 
-function parseUploadedImage(value: unknown, strapiBase: string): { src: string; alt: string } | null {
+function resolveMediaUrl(url: string, baseUrl: string): string {
+  if (!url.startsWith("/")) return url;
+  if (url.startsWith("/uploads/") || url.startsWith("/api/")) return `${baseUrl}${url}`;
+  return url;
+}
+
+function parseImageLike(value: unknown, baseUrl: string): { src: string; alt: string; width?: number; height?: number } | null {
   if (!value || typeof value !== "object") return null;
-  const src = value as Record<string, unknown>;
-  const rawUrl = typeof src.url === "string" ? src.url : null;
+
+  const node = parseStrapiEntity(value);
+  const rawUrl = typeof node.url === "string" ? node.url : typeof node.src === "string" ? node.src : null;
   if (!rawUrl) return null;
 
+  const alt =
+    typeof node.alternativeText === "string" && node.alternativeText.trim().length > 0
+      ? node.alternativeText.trim()
+      : typeof node.alt === "string" && node.alt.trim().length > 0
+        ? node.alt.trim()
+        : "Thumbnail";
+
   return {
-    src: rawUrl.startsWith("/") ? `${strapiBase}${rawUrl}` : rawUrl,
-    alt:
-      typeof src.alternativeText === "string" && src.alternativeText.trim().length > 0
-        ? src.alternativeText.trim()
-        : "Background image",
+    src: resolveMediaUrl(rawUrl, baseUrl),
+    alt,
+    width: typeof node.width === "number" ? node.width : undefined,
+    height: typeof node.height === "number" ? node.height : undefined,
   };
 }
 
-function parseImageArray(value: unknown): { src: string; alt: string }[] {
-  if (!Array.isArray(value)) return [];
-  return value.map(parseImage).filter((item): item is { src: string; alt: string } => Boolean(item));
-}
+function parseImageSource(
+  imageValue: unknown,
+  baseUrl: string,
+  fallbackUrl?: unknown,
+  fallbackAlt?: unknown,
+): { src: string; alt: string; width?: number; height?: number } | null {
+  const direct = parseImageLike(imageValue, baseUrl);
+  if (direct) return direct;
 
-function parseMediaImagesFromEventBlocks(value: unknown, strapiBase: string): { src: string; alt: string }[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((block) => {
-      if (!block || typeof block !== "object") return null;
-      const src = block as Record<string, unknown>;
-      if (src.__component !== "events.media") return null;
-
-      const image = src.image as Record<string, unknown> | null | undefined;
-      if (!image || typeof image !== "object") return null;
-
-      const rawUrl = typeof image.url === "string" ? image.url : null;
-      if (!rawUrl) return null;
-
-      const resolvedUrl = rawUrl.startsWith("/") ? `${strapiBase}${rawUrl}` : rawUrl;
-      const alt = typeof image.alternativeText === "string" && image.alternativeText.trim().length > 0
-        ? image.alternativeText.trim()
-        : "Image";
-
-      return { src: resolvedUrl, alt };
-    })
-    .filter((item): item is { src: string; alt: string } => Boolean(item));
-}
-
-function parseLeadingMediaImagesFromEventBlocks(value: unknown, strapiBase: string, limit = 2): { src: string; alt: string }[] {
-  if (!Array.isArray(value)) return [];
-
-  const images: { src: string; alt: string }[] = [];
-  for (const block of value) {
-    if (!block || typeof block !== "object") break;
-    const src = block as Record<string, unknown>;
-    if (src.__component !== "events.media") break;
-
-    const image = src.image as Record<string, unknown> | null | undefined;
-    if (!image || typeof image !== "object") continue;
-
-    const rawUrl = typeof image.url === "string" ? image.url : null;
-    if (!rawUrl) continue;
-
-    images.push({
-      src: rawUrl.startsWith("/") ? `${strapiBase}${rawUrl}` : rawUrl,
-      alt:
-        typeof image.alternativeText === "string" && image.alternativeText.trim().length > 0
-          ? image.alternativeText.trim()
-          : "Image",
-    });
-
-    if (images.length >= limit) break;
-  }
-
-  return images;
-}
-
-function stripText(value: string): string {
-  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function buildExcerpt(value: string, maxLength = 220): string {
-  const clean = stripText(value);
-  if (clean.length <= maxLength) return clean;
-  return `${clean.slice(0, maxLength).trimEnd()}`;
-}
-
-function parseBodyFromEventBlocks(value: unknown): string {
-  if (!Array.isArray(value)) return "";
-  const parts: string[] = [];
-
-  for (const block of value) {
-    if (!block || typeof block !== "object") continue;
-    const src = block as Record<string, unknown>;
-    const component = src.__component;
-
-    if (component === "events.rich-text") {
-      const body = typeof src.body === "string" ? src.body : "";
-      if (body) parts.push(body);
-    }
-
-    if (component === "events.details") {
-      const description = typeof src.description === "string" ? src.description : "";
-      if (description) parts.push(description);
-    }
-  }
-
-  return parts.join("\n\n");
-}
-
-function buildHomeFeedPosts(posts: PostRecord[], strapiBase: string, limit = 200): HomeFeedPost[] {
-  return posts.slice(0, limit).map((post) => {
-    const legacyImages = parseImageArray(post.images);
-    const leadingMediaImages = parseLeadingMediaImagesFromEventBlocks(post.eventBlocks, strapiBase, 2);
-
-    let images: { src: string; alt: string }[] = [];
-    if (post.category === "releases") {
-      const releaseImage = parseImage(post.image);
-      images = releaseImage ? [releaseImage] : [];
-    } else if (legacyImages.length) {
-      images = legacyImages.slice(0, 2);
-    } else if (leadingMediaImages.length) {
-      images = leadingMediaImages;
-    }
-
-    const eventBlockBody = parseBodyFromEventBlocks(post.eventBlocks);
-    const textSource = post.body && post.body.trim().length > 0 ? post.body : eventBlockBody;
-
+  if (typeof fallbackUrl === "string" && fallbackUrl.trim().length > 0) {
     return {
-      id: post.id,
-      category: post.category,
-      title: post.title,
-      excerpt: buildExcerpt(textSource || post.title),
-      images,
-      href: `/${post.category}#${post.id}`,
+      src: resolveMediaUrl(fallbackUrl.trim(), baseUrl),
+      alt: typeof fallbackAlt === "string" && fallbackAlt.trim().length > 0 ? fallbackAlt.trim() : "Thumbnail",
     };
+  }
+
+  return null;
+}
+
+function normalizeNewsImagePosition(value: unknown): "left" | "right" | "center" | "full" {
+  if (value === "right" || value === "center" || value === "full") return value;
+  return "left";
+}
+
+function normalizeNewsImageWidth(value: unknown): "narrow" | "medium" | "wide" {
+  if (value === "narrow" || value === "wide") return value;
+  return "medium";
+}
+
+function normalizeNewsImageParagraph(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+}
+
+function normalizeEventImagePosition(value: unknown): "left" | "right" | "full" {
+  if (value === "right" || value === "full") return value;
+  return "left";
+}
+
+function isHtmlLikeText(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function splitNewsSectionBody(value: string): string[] {
+  const body = value.trim();
+  if (!body) return [];
+
+  if (isHtmlLikeText(body) && /<\/p>/i.test(body)) {
+    const htmlParagraphs = body
+      .split(/(?<=<\/p>)/i)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (htmlParagraphs.length > 1) return htmlParagraphs;
+  }
+
+  return body
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function pushNewsMediaBlock(
+  parsedBlocks: NewsPost["newsBlocks"],
+  image: { src: string; alt: string; width?: number; height?: number },
+  options: {
+    id?: unknown;
+    caption?: unknown;
+    imagePosition?: unknown;
+    imageWidth?: unknown;
+    imageParagraph?: unknown;
+  },
+) {
+  const block: NewsPost["newsBlocks"][number] = {
+    __component: "news.media",
+    id: typeof options.id === "number" ? options.id : parsedBlocks.length + 1,
+    image: {
+      url: image.src,
+      alt: image.alt,
+      width: image.width,
+      height: image.height,
+    },
+    caption: typeof options.caption === "string" && options.caption.trim().length > 0 ? options.caption.trim() : undefined,
+    imagePosition: normalizeNewsImagePosition(options.imagePosition),
+    imageWidth: normalizeNewsImageWidth(options.imageWidth),
+  };
+
+  const imageParagraph = normalizeNewsImageParagraph(options.imageParagraph);
+  if (imageParagraph) block.imageParagraph = imageParagraph;
+
+  parsedBlocks.push(block);
+}
+
+function pushNewsRichTextBlock(parsedBlocks: NewsPost["newsBlocks"], body: string, id?: unknown) {
+  const trimmed = body.trim();
+  if (!trimmed) return;
+
+  parsedBlocks.push({
+    __component: "news.rich-text",
+    id: typeof id === "number" ? id : parsedBlocks.length + 1,
+    body: trimmed,
   });
 }
 
-function parseCredits(value: unknown): { label: string; value: string }[] {
-  if (!Array.isArray(value)) return [];
-  const credits = value
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const label = (item as any).label;
-      const creditValue = (item as any).value;
-      if (typeof label !== "string" || typeof creditValue !== "string") return null;
-      return { label: label.trim(), value: creditValue.trim() };
-    })
-    .filter((item): item is { label: string; value: string } => Boolean(item && (item.label || item.value)));
+type ParsedNewsSectionFields = {
+  body?: string;
+  id?: unknown;
+  image?: unknown;
+  imageUrl?: unknown;
+  imageAlt?: unknown;
+  caption?: unknown;
+  imagePosition?: unknown;
+  imageWidth?: unknown;
+  imageParagraph?: unknown;
+};
 
-  return credits;
+function pushNewsSectionBlocks(
+  parsedBlocks: NewsPost["newsBlocks"],
+  fields: ParsedNewsSectionFields,
+  baseUrl: string,
+) {
+  const body = typeof fields.body === "string" ? fields.body.trim() : "";
+  const image = parseImageSource(fields.image, baseUrl, fields.imageUrl, fields.imageAlt ?? fields.caption);
+  const sections = body ? splitNewsSectionBody(body) : [];
+  const imageParagraph =
+    typeof fields.imageParagraph === "number" && fields.imageParagraph > 0 && sections.length > 0
+      ? Math.min(fields.imageParagraph, sections.length)
+      : 1;
+
+  if (sections.length > 0) {
+    for (const [index, section] of sections.entries()) {
+      if (image && index === imageParagraph - 1) {
+        pushNewsMediaBlock(parsedBlocks, image, {
+          caption: fields.caption,
+          imagePosition: fields.imagePosition,
+          imageWidth: fields.imageWidth,
+        });
+      }
+
+      pushNewsRichTextBlock(parsedBlocks, section, index === 0 ? fields.id : undefined);
+    }
+    return;
+  }
+
+  if (image) {
+    pushNewsMediaBlock(parsedBlocks, image, {
+      caption: fields.caption,
+      imagePosition: fields.imagePosition,
+      imageWidth: fields.imageWidth,
+    });
+  }
+  if (body) pushNewsRichTextBlock(parsedBlocks, body, fields.id);
 }
 
-function parsePosts(items: unknown[]): PostRecord[] {
-  const posts: PostRecord[] = [];
+type NewsRichTextBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "news.rich-text" }>;
+type NewsMediaBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "news.media" }>;
 
-  for (const item of items) {
-    const src = parseStrapiEntity(item);
-    const category = src.category;
-    const title = src.title;
-    const publishedAt = typeof src.publishedAt === "string" ? src.publishedAt : "";
-    if (
-      (category !== "news" && category !== "events" && category !== "releases") ||
-      typeof title !== "string" ||
-      !title.trim() ||
-      !publishedAt
-    ) {
+function pushNewsMediaFromBlock(parsedBlocks: NewsPost["newsBlocks"], media: NewsMediaBlockParsed) {
+  if (!media.image) return;
+  pushNewsMediaBlock(
+    parsedBlocks,
+    {
+      src: media.image.url,
+      alt: media.image.alt,
+      width: media.image.width,
+      height: media.image.height,
+    },
+    {
+      id: media.id,
+      caption: media.caption,
+      imagePosition: media.imagePosition,
+      imageWidth: media.imageWidth,
+      imageParagraph: media.imageParagraph,
+    },
+  );
+}
+
+/** body + one or more media blocks → interleave like news.section (images float in text flow). */
+function coalesceBodyWithMediaBlocks(parsedBlocks: NewsPost["newsBlocks"]): NewsPost["newsBlocks"] {
+  const richBlocks = parsedBlocks.filter(
+    (block): block is NewsRichTextBlockParsed =>
+      block.__component === "news.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
+  );
+  const mediaBlocks = parsedBlocks.filter(
+    (block): block is NewsMediaBlockParsed => block.__component === "news.media" && !!block.image,
+  );
+
+  if (richBlocks.length !== 1 || mediaBlocks.length === 0) return parsedBlocks;
+  if (richBlocks.length + mediaBlocks.length !== parsedBlocks.length) return parsedBlocks;
+
+  const rich = richBlocks[0];
+  const body = rich.body.trim();
+  const sections = splitNewsSectionBody(body);
+  const merged: NewsPost["newsBlocks"] = [];
+
+  const mediaByParagraph = mediaBlocks.map((media) => ({
+    media,
+    paragraph: normalizeNewsImageParagraph(media.imageParagraph) ?? 1,
+  }));
+
+  const appendMediaForParagraph = (paragraphNumber: number) => {
+    for (const { media, paragraph } of mediaByParagraph) {
+      if (paragraph === paragraphNumber) pushNewsMediaFromBlock(merged, media);
+    }
+  };
+
+  if (sections.length > 0) {
+    for (const [index, section] of sections.entries()) {
+      appendMediaForParagraph(index + 1);
+      pushNewsRichTextBlock(merged, section, index === 0 ? rich.id : undefined);
+    }
+
+    for (const { media, paragraph } of mediaByParagraph) {
+      if (paragraph > sections.length) pushNewsMediaFromBlock(merged, media);
+    }
+
+    return merged;
+  }
+
+  appendMediaForParagraph(1);
+  pushNewsRichTextBlock(merged, body, rich.id);
+  return merged;
+}
+
+function finalizeNewsBlocks(parsedBlocks: NewsPost["newsBlocks"], src: Record<string, unknown>, baseUrl: string) {
+  ensureTopLevelNewsBody(parsedBlocks, src);
+
+  const hasInlineMedia = parsedBlocks.some((block) => block.__component === "news.media" && !!block.image);
+  if (!hasInlineMedia) {
+    const fallbackTopLevelImage = parseImageLike(src.image, baseUrl);
+    if (fallbackTopLevelImage) {
+      pushNewsMediaBlock(parsedBlocks, fallbackTopLevelImage, {
+        imagePosition: "left",
+        imageWidth: "medium",
+      });
+    }
+  }
+
+  const coalesced = coalesceBodyWithMediaBlocks(parsedBlocks);
+  if (coalesced !== parsedBlocks) {
+    parsedBlocks.length = 0;
+    parsedBlocks.push(...coalesced);
+  }
+}
+
+function hasNewsRichTextBlock(parsedBlocks: NewsPost["newsBlocks"]): boolean {
+  return parsedBlocks.some(
+    (block) =>
+      block.__component === "news.rich-text" &&
+      typeof block.body === "string" &&
+      block.body.trim().length > 0,
+  );
+}
+
+/** Strapi often stores prose on the post `body` field while media lives in eventBlocks/newsBlocks. */
+function ensureTopLevelNewsBody(parsedBlocks: NewsPost["newsBlocks"], src: Record<string, unknown>) {
+  const body = typeof src.body === "string" ? src.body.trim() : "";
+  if (!body || hasNewsRichTextBlock(parsedBlocks)) return;
+  parsedBlocks.unshift({
+    __component: "news.rich-text",
+    id: 0,
+    body,
+  });
+}
+
+function appendNewsBlocksFromEventBlocks(parsedBlocks: NewsPost["newsBlocks"], src: Record<string, unknown>, baseUrl: string) {
+  if (!Array.isArray(src.eventBlocks)) return;
+
+  for (const block of src.eventBlocks) {
+    if (!block || typeof block !== "object") continue;
+    const parsed = parseStrapiEntity(block);
+
+    if (parsed.__component === "news.section" || parsed.__component === "events.news-section") {
+      pushNewsSectionBlocks(parsedBlocks, parsed, baseUrl);
       continue;
     }
 
-    const idSource = (src.documentId ?? src.id) as unknown;
-    posts.push({
-      id: typeof idSource === "string" || typeof idSource === "number" ? String(idSource) : `${category}-${posts.length}`,
-      title: title.trim(),
+    if (parsed.__component === "events.rich-text") {
+      const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+      if (!body) continue;
+      pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
+      continue;
+    }
+
+    if (parsed.__component === "events.media") {
+      const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
+      if (!image) continue;
+      const alreadyHasSameImage = parsedBlocks.some(
+        (existing) =>
+          existing.__component === "news.media" &&
+          existing.image?.url === image.src,
+      );
+      if (alreadyHasSameImage) continue;
+      pushNewsMediaBlock(parsedBlocks, image, {
+        id: parsed.id,
+        caption: parsed.caption,
+        imagePosition: parsed.imagePosition,
+        imageWidth: parsed.imageWidth,
+        imageParagraph: parsed.imageParagraph,
+      });
+    }
+  }
+}
+
+function resolvePostId(item: unknown, src: Record<string, unknown>, title: string): string {
+  const rawItem = item as Record<string, unknown> | null;
+  const rawId = rawItem?.documentId ?? src.documentId ?? rawItem?.id ?? src.id;
+  return String(rawId ?? title).trim();
+}
+
+function resolveLegacyPostId(item: unknown, src: Record<string, unknown>): string | undefined {
+  const rawItem = item as Record<string, unknown> | null;
+  const rawId = rawItem?.id ?? src.id;
+  if (rawId === undefined || rawId === null) return undefined;
+  return String(rawId).trim();
+}
+
+function resolvePostDate(src: Record<string, unknown>): string {
+  return (
+    (typeof src.publishedOn === "string" && src.publishedOn) ||
+    (typeof src.publishedAt === "string" && src.publishedAt) ||
+    (typeof src.createdAt === "string" && src.createdAt) ||
+    (typeof src.updatedAt === "string" && src.updatedAt) ||
+    "1970-01-01T00:00:00.000Z"
+  );
+}
+
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function clampText(value: string, maxLength = 210): string {
+  const normalized = stripHtml(value);
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength).trimEnd()}...`;
+}
+
+function pickPostThumbnail(src: Record<string, unknown>, baseUrl: string): { src: string; alt: string } | null {
+  const single = parseImageLike(src.image, baseUrl);
+  if (single) return { src: single.src, alt: single.alt };
+
+  if (Array.isArray(src.images) && src.images.length > 0) {
+    const first = parseImageLike(src.images[0], baseUrl);
+    if (first) return { src: first.src, alt: first.alt };
+  }
+
+  if (Array.isArray(src.newsBlocks)) {
+    for (const block of src.newsBlocks) {
+      if (!block || typeof block !== "object") continue;
+      const parsed = parseStrapiEntity(block);
+      if (parsed.__component !== "news.media") continue;
+      const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
+      if (image) return { src: image.src, alt: image.alt };
+    }
+  }
+
+  if (Array.isArray(src.eventBlocks)) {
+    for (const block of src.eventBlocks) {
+      if (!block || typeof block !== "object") continue;
+      const parsed = parseStrapiEntity(block);
+      if (parsed.__component !== "events.media") continue;
+      const image = parseImageLike(parsed.image, baseUrl);
+      if (image) return { src: image.src, alt: image.alt };
+    }
+  }
+
+  return null;
+}
+
+function parseTags(src: Record<string, unknown>, category: PostCategory): string[] {
+  const parsed = new Set<string>();
+  const rawTags = src.tags;
+
+  if (Array.isArray(rawTags)) {
+    for (const tag of rawTags) {
+      if (typeof tag === "string" && tag.trim().length > 0) {
+        parsed.add(tag.trim().toLowerCase());
+        continue;
+      }
+
+      if (tag && typeof tag === "object") {
+        const normalized = parseStrapiEntity(tag);
+        const label =
+          typeof normalized.name === "string"
+            ? normalized.name
+            : typeof normalized.title === "string"
+              ? normalized.title
+              : typeof normalized.label === "string"
+                ? normalized.label
+                : null;
+        if (label && label.trim().length > 0) parsed.add(label.trim().toLowerCase());
+      }
+    }
+  }
+
+  if (parsed.size === 0) {
+    parsed.add(category);
+  }
+
+  return Array.from(parsed);
+}
+
+function formatDateLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return new Intl.DateTimeFormat("en", { month: "short", year: "numeric" }).format(date);
+}
+
+function buildArchiveEntries(items: unknown[], baseUrl: string): ArchiveEntry[] {
+  const entries: ArchiveEntry[] = [];
+
+  for (const item of items) {
+    const src = parseStrapiEntity(item);
+    const category = normalizeCategory(src.category);
+    const title = typeof src.title === "string" ? src.title.trim() : "";
+    if (!category || !title) continue;
+
+    const id = resolvePostId(item, src, title);
+    const legacyId = resolveLegacyPostId(item, src);
+    const publishedAt = resolvePostDate(src);
+
+    entries.push({
+      id,
+      legacyId,
+      title,
       category,
-      body: typeof src.body === "string" ? src.body : undefined,
       publishedAt,
-      images: src.images,
-      image: src.image,
-      credits: src.credits,
-      eventBlocks: Array.isArray(src.eventBlocks) ? src.eventBlocks : [],
+      dateLabel: formatDateLabel(publishedAt),
+      tags: parseTags(src, category),
+      thumbnail: pickPostThumbnail(src, baseUrl),
+      href: buildPostHref(category, id),
     });
   }
 
-  return posts;
+  entries.sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
+  return entries;
 }
 
-function pickLatestPostsByCategory(items: PostRecord[], limitByCategory: number): Record<PostCategory, PostRecord[]> {
-  const buckets: Record<PostCategory, PostRecord[]> = {
+function pickLatestTitlesByCategory(items: unknown[], limitByCategory: number): Record<PostCategory, string[]> {
+  const buckets: Record<PostCategory, string[]> = {
     news: [],
     events: [],
     releases: [],
   };
 
   for (const item of items) {
-    if (buckets[item.category].length < limitByCategory) {
-      buckets[item.category].push(item);
+    const src = parseStrapiEntity(item);
+    const category = src.category;
+    const title = src.title;
+
+    if ((category === "news" || category === "events" || category === "releases") && typeof title === "string" && title.trim().length > 0) {
+      if (buckets[category].length < limitByCategory) {
+        buckets[category].push(title.trim());
+      }
     }
   }
 
   return buckets;
 }
 
-function parseEventBlocks(raw: unknown[], strapiBase: string): EventBlock[] {
-  const blocks: EventBlock[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const b = item as Record<string, unknown>;
-    const comp = b.__component;
+function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPost["newsBlocks"] {
+  const parsedBlocks: NewsPost["newsBlocks"] = [];
 
-    if (comp === "events.details") {
-      blocks.push({
-        __component: "events.details",
-        id: typeof b.id === "number" ? b.id : 0,
-        headline: typeof b.headline === "string" ? b.headline : "",
-        venue: typeof b.venue === "string" ? b.venue : undefined,
-        description: typeof b.description === "string" ? b.description : undefined,
-        dateLabel: typeof b.dateLabel === "string" ? b.dateLabel : undefined,
-      });
-    } else if (comp === "events.rich-text") {
-      blocks.push({
-        __component: "events.rich-text",
-        id: typeof b.id === "number" ? b.id : 0,
-        title: typeof b.title === "string" ? b.title : undefined,
-        body: typeof b.body === "string" ? b.body : undefined,
-      });
-    } else if (comp === "events.media") {
-      // image may be: { url, alternativeText, width, height } (v5 flat) or null/undefined
-      const imgRaw = b.image as Record<string, unknown> | null | undefined;
-      let image: { url: string; alt: string; width?: number; height?: number } | null = null;
-      if (imgRaw && typeof imgRaw === "object") {
-        const url = typeof imgRaw.url === "string" ? imgRaw.url : null;
-        if (url) {
-          const resolvedUrl = url.startsWith("/") ? `${strapiBase}${url}` : url;
-          image = {
-            url: resolvedUrl,
-            alt: typeof imgRaw.alternativeText === "string" && imgRaw.alternativeText.trim()
-              ? imgRaw.alternativeText.trim()
-              : "Image",
-            width: typeof imgRaw.width === "number" ? imgRaw.width : undefined,
-            height: typeof imgRaw.height === "number" ? imgRaw.height : undefined,
-          };
-        }
+  if (Array.isArray(src.newsBlocks)) {
+    for (const block of src.newsBlocks) {
+      if (!block || typeof block !== "object") continue;
+      const parsed = parseStrapiEntity(block);
+
+      if (parsed.__component === "news.rich-text") {
+        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+        if (!body) continue;
+        pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
+        continue;
       }
-      const pos = b.imagePosition;
-      blocks.push({
-        __component: "events.media",
-        id: typeof b.id === "number" ? b.id : 0,
-        image,
-        caption: typeof b.caption === "string" ? b.caption : undefined,
-        imagePosition: pos === "right" ? "right" : pos === "full" ? "full" : "left",
+
+      if (parsed.__component === "news.section") {
+        pushNewsSectionBlocks(parsedBlocks, parsed, baseUrl);
+        continue;
+      }
+
+      if (parsed.__component === "news.media") {
+        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+        if (!image) continue;
+        pushNewsMediaBlock(parsedBlocks, image, {
+          id: parsed.id,
+          caption: parsed.caption,
+          imagePosition: parsed.imagePosition,
+          imageWidth: parsed.imageWidth,
+        });
+      }
+    }
+  }
+
+  if (parsedBlocks.length === 0) {
+    appendNewsBlocksFromEventBlocks(parsedBlocks, src, baseUrl);
+  }
+
+  if (parsedBlocks.length > 0) {
+    finalizeNewsBlocks(parsedBlocks, src, baseUrl);
+    return parsedBlocks;
+  }
+
+  if (Array.isArray(src.images)) {
+    for (const [index, imageValue] of src.images.slice(0, 2).entries()) {
+      const image = parseImageLike(imageValue, baseUrl);
+      if (!image) continue;
+      pushNewsMediaBlock(parsedBlocks, image, {
+        imagePosition: index % 2 === 0 ? "left" : "right",
+        imageWidth: "medium",
+      });
+    }
+  } else {
+    const image = parseImageLike(src.image, baseUrl);
+    if (image) {
+      pushNewsMediaBlock(parsedBlocks, image, {
+        imagePosition: "left",
+        imageWidth: "medium",
       });
     }
   }
+
+  const body = typeof src.body === "string" ? src.body.trim() : "";
+  if (body) {
+    pushNewsRichTextBlock(parsedBlocks, body);
+  }
+
+  finalizeNewsBlocks(parsedBlocks, src, baseUrl);
+  return parsedBlocks;
+}
+
+function buildNewsPosts(items: unknown[], baseUrl: string): NewsPost[] {
+  const posts: NewsPost[] = [];
+
+  for (const item of items) {
+    const src = parseStrapiEntity(item);
+    if (src.category !== "news") continue;
+
+    const title = typeof src.title === "string" ? src.title.trim() : "";
+    if (!title) continue;
+
+    const newsBlocks = parseNewsBlocks(src, baseUrl);
+    if (!newsBlocks.length) continue;
+
+    posts.push({
+      id: resolvePostId(item, src, title),
+      legacyId: resolveLegacyPostId(item, src),
+      title,
+      summary: typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined,
+      publishedAt: resolvePostDate(src),
+      newsBlocks,
+    });
+  }
+
+  posts.sort((left, right) => new Date(right.publishedAt ?? 0).getTime() - new Date(left.publishedAt ?? 0).getTime());
+  return posts;
+}
+
+function parseEventBlocks(src: Record<string, unknown>, baseUrl: string): EventPost["eventBlocks"] {
+  const blocks: EventPost["eventBlocks"] = [];
+
+  if (Array.isArray(src.eventBlocks)) {
+    for (const block of src.eventBlocks) {
+      if (!block || typeof block !== "object") continue;
+      const parsed = parseStrapiEntity(block);
+
+      if (parsed.__component === "events.details") {
+        blocks.push({
+          __component: "events.details",
+          id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
+          venue: typeof parsed.venue === "string" ? parsed.venue.trim() : undefined,
+          description: typeof parsed.description === "string" ? parsed.description.trim() : undefined,
+          dateLabel: typeof parsed.dateLabel === "string" ? parsed.dateLabel.trim() : undefined,
+        });
+        continue;
+      }
+
+      if (parsed.__component === "events.rich-text") {
+        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+        blocks.push({
+          __component: "events.rich-text",
+          id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
+          title: typeof parsed.title === "string" ? parsed.title.trim() : undefined,
+          body: body || undefined,
+        });
+        continue;
+      }
+
+      if (parsed.__component === "events.media") {
+        const image = parseImageLike(parsed.image, baseUrl);
+        const block: EventPost["eventBlocks"][number] = {
+          __component: "events.media",
+          id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
+          image: image
+            ? {
+                url: image.src,
+                alt: image.alt,
+                width: image.width,
+                height: image.height,
+              }
+            : null,
+          caption: typeof parsed.caption === "string" ? parsed.caption.trim() : undefined,
+          imagePosition: normalizeEventImagePosition(parsed.imagePosition),
+          imageWidth: normalizeNewsImageWidth(parsed.imageWidth),
+        };
+        const imageParagraph = normalizeNewsImageParagraph(parsed.imageParagraph);
+        if (imageParagraph) block.imageParagraph = imageParagraph;
+        blocks.push(block);
+      }
+    }
+  }
+
+  if (blocks.length > 0) return blocks;
+
+  const body = typeof src.body === "string" ? src.body.trim() : "";
+  blocks.push({
+    __component: "events.details",
+    id: 1,
+    description: body || undefined,
+  });
+
+  const fallbackImage = parseImageLike(src.image, baseUrl);
+  if (fallbackImage) {
+    blocks.push({
+      __component: "events.media",
+      id: 2,
+      image: { url: fallbackImage.src, alt: fallbackImage.alt, width: fallbackImage.width, height: fallbackImage.height },
+      caption: undefined,
+      imagePosition: "left",
+      imageWidth: "medium",
+    });
+  }
+
   return blocks;
 }
 
-function parseEventPosts(posts: PostRecord[], strapiBase: string): EventPost[] {
-  return posts.map((post) => ({
-    id: post.id,
-    title: post.title,
-    body: post.body,
-    eventBlocks: parseEventBlocks(Array.isArray(post.eventBlocks) ? post.eventBlocks : [], strapiBase),
+function buildEventPosts(items: unknown[], baseUrl: string): EventPost[] {
+  const posts: EventPost[] = [];
+
+  for (const item of items) {
+    const src = parseStrapiEntity(item);
+    if (src.category !== "events") continue;
+
+    const title = typeof src.title === "string" ? src.title.trim() : "";
+    if (!title) continue;
+
+    const eventBlocks = parseEventBlocks(src, baseUrl);
+    posts.push({
+      id: resolvePostId(item, src, title),
+      legacyId: resolveLegacyPostId(item, src),
+      title,
+      summary: typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined,
+      publishedAt: resolvePostDate(src),
+      body: typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : undefined,
+      eventBlocks,
+    });
+  }
+
+  posts.sort((left, right) => new Date(right.publishedAt ?? 0).getTime() - new Date(left.publishedAt ?? 0).getTime());
+  return posts;
+}
+
+function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
+  const cards: ReleaseCard[] = [];
+
+  for (const item of items) {
+    const src = parseStrapiEntity(item);
+    if (src.category !== "releases") continue;
+
+    const title = typeof src.title === "string" ? src.title.trim() : "";
+    if (!title) continue;
+
+    const image = pickPostThumbnail(src, baseUrl);
+    const body = typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : "";
+    const summary = typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined;
+
+    const credits: ReleaseCard["credits"] = [];
+    if (Array.isArray(src.credits)) {
+      for (const entry of src.credits) {
+        if (!entry || typeof entry !== "object") continue;
+        const c = entry as Record<string, unknown>;
+        const label = typeof c.label === "string" ? c.label.trim() : "";
+        const value = typeof c.value === "string" ? c.value.trim() : "";
+        if (label && value) credits.push({ label, value });
+      }
+    }
+
+    cards.push({
+      id: resolvePostId(item, src, title),
+      legacyId: resolveLegacyPostId(item, src),
+      title,
+      summary,
+      publishedAt: resolvePostDate(src),
+      image: image ?? { src: "", alt: title },
+      credits,
+      body,
+    });
+  }
+
+  cards.sort((left, right) => new Date(right.publishedAt ?? 0).getTime() - new Date(left.publishedAt ?? 0).getTime());
+  return cards;
+}
+
+function getNewsExcerpt(post: NewsPost): string {
+  if (post.summary && post.summary.trim().length > 0) return clampText(post.summary, 170);
+  const rich = post.newsBlocks.find(
+    (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "news.rich-text" }> =>
+      block.__component === "news.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
+  );
+  return clampText(rich?.body ?? post.title, 170);
+}
+
+function getNewsImage(post: NewsPost): SiteContent["homeFeedPosts"][number]["image"] {
+  const media = post.newsBlocks.find(
+    (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "news.media" }> =>
+      block.__component === "news.media" && !!block.image,
+  );
+  if (!media || !media.image) return null;
+  return { src: getLocalThumbSrc(media.image.url), alt: media.image.alt };
+}
+
+function getEventExcerpt(post: EventPost): string {
+  if (post.summary && post.summary.trim().length > 0) return clampText(post.summary, 170);
+
+  const detail = post.eventBlocks.find(
+    (block): block is Extract<EventPost["eventBlocks"][number], { __component: "events.details" }> =>
+      block.__component === "events.details" && typeof block.description === "string" && block.description.trim().length > 0,
+  );
+  if (detail?.description) return clampText(detail.description, 170);
+
+  const rich = post.eventBlocks.find(
+    (block): block is Extract<EventPost["eventBlocks"][number], { __component: "events.rich-text" }> =>
+      block.__component === "events.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
+  );
+  if (rich?.body) return clampText(rich.body, 170);
+
+  if (post.body && post.body.trim().length > 0) return clampText(post.body, 170);
+  return clampText(post.title, 170);
+}
+
+function getEventImage(post: EventPost): SiteContent["homeFeedPosts"][number]["image"] {
+  const media = post.eventBlocks.find(
+    (block): block is Extract<EventPost["eventBlocks"][number], { __component: "events.media" }> =>
+      block.__component === "events.media" && !!block.image,
+  );
+  if (!media || !media.image) return null;
+  return { src: getLocalThumbSrc(media.image.url), alt: media.image.alt };
+}
+
+function getFeedImage(image: SiteContent["homeFeedPosts"][number]["image"]): SiteContent["homeFeedPosts"][number]["image"] {
+  if (!image) return null;
+
+  return {
+    ...image,
+    src: getLocalThumbSrc(image.src),
+  };
+}
+
+function getReleaseExcerpt(card: ReleaseCard): string {
+  if (card.summary && card.summary.trim().length > 0) return clampText(card.summary, 170);
+  if (card.body && card.body.trim().length > 0) return clampText(card.body, 170);
+  return clampText(card.title ?? "release", 170);
+}
+
+function findNewsPost(entry: ArchiveEntry, posts: NewsPost[]): NewsPost | undefined {
+  return posts.find((post) => post.id === entry.id) ?? posts.find((post) => normalizeText(post.title) === normalizeText(entry.title));
+}
+
+function findEventPost(entry: ArchiveEntry, posts: EventPost[]): EventPost | undefined {
+  return posts.find((post) => post.id === entry.id) ?? posts.find((post) => normalizeText(post.title) === normalizeText(entry.title));
+}
+
+function withReleaseTitles(content: SiteContent): ReleaseCard[] {
+  return content.releaseCards.map((card, index) => ({
+    ...card,
+    title: card.title || content.releaseList[index] || undefined,
   }));
 }
 
-function mergeContent(raw: unknown): SiteContent {
-  const src = (raw ?? {}) as Record<string, unknown>;
+function findReleaseCard(entry: ArchiveEntry, cards: ReleaseCard[]): ReleaseCard | undefined {
+  return cards.find((card) => card.id === entry.id) ?? cards.find((card) => normalizeText(card.title ?? "") === normalizeText(entry.title));
+}
+
+function buildHomeFeedPosts(content: SiteContent): SiteContent["homeFeedPosts"] {
+  const titledReleaseCards = withReleaseTitles(content);
+
+  return [...content.archiveEntries]
+    .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime())
+    .map((entry) => {
+      if (entry.category === "news") {
+        const post = findNewsPost(entry, content.newsPosts);
+        return {
+          id: entry.id,
+          category: entry.category,
+          title: entry.title,
+          excerpt: post ? getNewsExcerpt(post) : clampText(entry.title, 170),
+          image: getFeedImage(post ? getNewsImage(post) ?? entry.thumbnail : entry.thumbnail),
+          publishedAt: entry.publishedAt,
+          dateLabel: entry.dateLabel,
+          href: entry.href,
+        };
+      }
+
+      if (entry.category === "events") {
+        const post = findEventPost(entry, content.eventPosts);
+        return {
+          id: entry.id,
+          category: entry.category,
+          title: entry.title,
+          excerpt: post ? getEventExcerpt(post) : clampText(entry.title, 170),
+          image: getFeedImage(post ? getEventImage(post) ?? entry.thumbnail : entry.thumbnail),
+          publishedAt: entry.publishedAt,
+          dateLabel: entry.dateLabel,
+          href: entry.href,
+        };
+      }
+
+      const card = findReleaseCard(entry, titledReleaseCards);
+      return {
+        id: entry.id,
+        category: entry.category,
+        title: entry.title,
+        excerpt: card ? getReleaseExcerpt(card) : clampText(entry.title, 170),
+        image: getFeedImage(card ? card.image ?? entry.thumbnail : entry.thumbnail),
+        publishedAt: entry.publishedAt,
+        dateLabel: entry.dateLabel,
+        href: entry.href,
+      };
+    });
+}
+
+function pickRenderedTitles(content: SiteContent): Pick<SiteContent, "newsList" | "eventsList" | "releaseList"> {
+  const newsList = content.newsPosts.slice(0, 9).map((post) => post.title);
+  const eventsList = content.eventPosts.slice(0, 9).map((post) => post.title);
+  const releaseList = withReleaseTitles(content)
+    .slice(0, 9)
+    .map((card) => card.title)
+    .filter((title): title is string => typeof title === "string" && title.trim().length > 0);
+
   return {
-    newsList: pickStringArray(src.newsList, localSiteContent.newsList),
-    eventsList: pickStringArray(src.eventsList, localSiteContent.eventsList),
-    newsCards: pickObjectArray(src.newsCards, localSiteContent.newsCards),
-    newsFlowText: typeof src.newsFlowText === "string" && src.newsFlowText.trim().length > 0 ? src.newsFlowText : localSiteContent.newsFlowText,
-    releaseList: pickStringArray(src.releaseList, localSiteContent.releaseList),
-    releaseCards: pickObjectArray(src.releaseCards, localSiteContent.releaseCards),
-    eventPosts: [],
+    newsList: newsList.length ? newsList : content.newsList,
+    eventsList: eventsList.length ? eventsList : content.eventsList,
+    releaseList: releaseList.length ? releaseList : content.releaseList,
+  };
+}
+
+function withDerivedContent(content: SiteContent): SiteContent {
+  const archiveEntries = content.archiveEntries.map((entry) => ({
+    ...entry,
+    href: buildPostHref(entry.category, entry.id),
+  }));
+
+  const renderedTitles = pickRenderedTitles(content);
+  const contentWithLinks = {
+    ...content,
+    archiveEntries,
+  };
+
+  return {
+    ...contentWithLinks,
+    newsList: renderedTitles.newsList,
+    eventsList: renderedTitles.eventsList,
+    releaseList: renderedTitles.releaseList,
+    homeFeedPosts: buildHomeFeedPosts(contentWithLinks),
+  };
+}
+
+function mergeContent(raw: unknown, baseUrl: string): SiteContent {
+  const src = (raw ?? {}) as Record<string, unknown>;
+
+  const bgImage = parseImageLike(src.aboutBackground, baseUrl);
+
+  return {
+    newsList: localSiteContent.newsList,
+    newsPosts: localSiteContent.newsPosts,
+    eventsList: localSiteContent.eventsList,
+    newsCards: localSiteContent.newsCards,
+    newsFlowText: localSiteContent.newsFlowText,
+    releaseList: localSiteContent.releaseList,
+    releaseCards: localSiteContent.releaseCards,
+    eventPosts: localSiteContent.eventPosts,
     homeFeedPosts: [],
     about: {
-      text:
-        typeof src.aboutText === "string" && src.aboutText.trim().length > 0
-          ? src.aboutText
-          : localSiteContent.about.text,
-      backgroundImage: null,
+      text: typeof src.aboutText === "string" && src.aboutText.trim().length > 0 ? src.aboutText : localSiteContent.about.text,
+      backgroundImage: bgImage ? { src: bgImage.src, alt: bgImage.alt } : localSiteContent.about.backgroundImage,
     },
+    archiveEntries: localSiteContent.archiveEntries,
   };
 }
 
 function normalizeStrapiPayload(json: any): Record<string, unknown> {
-  // Strapi v4/v5 commonly respond with { data: { attributes: ... } } for single type.
   if (json && typeof json === "object") {
     if (json.data?.attributes && typeof json.data.attributes === "object") return json.data.attributes;
     if (json.data && typeof json.data === "object") return json.data;
@@ -340,97 +1000,88 @@ function normalizeStrapiPayload(json: any): Record<string, unknown> {
   return json ?? {};
 }
 
-export async function getSiteContent(): Promise<SiteContent> {
-  if (CMS_MODE !== "strapi") return localSiteContent;
-  if (!STRAPI_URL) return localSiteContent;
+async function fetchStrapiSiteContent(): Promise<SiteContent> {
+  const baseUrl = STRAPI_URL!.replace(/\/+$/, "");
+  const siteContentEndpoint = `${baseUrl}/api/site-content?populate=aboutBackground`;
+  const postsQuery = [
+    "sort[0]=publishedOn:desc",
+    "sort[1]=publishedAt:desc",
+    "pagination[pageSize]=200",
+    "populate[image][fields][0]=url",
+    "populate[image][fields][1]=alternativeText",
+    "populate[image][fields][2]=width",
+    "populate[image][fields][3]=height",
+    "populate[newsBlocks][populate]=*",
+    "populate[eventBlocks][populate]=*",
+  ].join("&");
+  const postsEndpoint = `${baseUrl}/api/posts?${postsQuery}`;
 
-  const baseUrl = STRAPI_URL.replace(/\/+$/, "");
-  const siteContentEndpoint = `${baseUrl}/api/site-content?populate[aboutBackground]=*`;
-  const postsEndpoint = `${baseUrl}/api/posts?sort[0]=publishedAt:desc&pagination[pageSize]=200&populate[eventBlocks][populate]=*`;
   const headers = {
     ...(STRAPI_TOKEN ? { Authorization: `Bearer ${STRAPI_TOKEN}` } : {}),
   };
 
+  const [siteContentResponse, postsResponse] = await Promise.all([
+    fetch(siteContentEndpoint, {
+      headers,
+      cache: "no-store",
+    }),
+    fetch(postsEndpoint, {
+      headers,
+      cache: "no-store",
+    }),
+  ]);
+
+  const base = siteContentResponse.ok ? mergeContent(normalizeStrapiPayload(await siteContentResponse.json()), baseUrl) : localSiteContent;
+  if (!postsResponse.ok) {
+    console.warn(`[15love] Posts endpoint returned ${postsResponse.status} — using fallback data`);
+    return withDerivedContent(base);
+  }
+
+  const postsJson = await postsResponse.json();
+  const posts = Array.isArray(postsJson?.data) ? postsJson.data : [];
+  const archiveEntries = buildArchiveEntries(posts, baseUrl);
+  const newsPosts = buildNewsPosts(posts, baseUrl);
+  const eventPosts = buildEventPosts(posts, baseUrl);
+  const releaseCards = buildReleaseCards(posts, baseUrl);
+
+  return withDerivedContent({
+    ...base,
+    newsPosts: newsPosts.length ? newsPosts : base.newsPosts,
+    eventPosts: eventPosts.length ? eventPosts : base.eventPosts,
+    releaseCards: releaseCards.length ? releaseCards : base.releaseCards,
+    archiveEntries: archiveEntries.length ? archiveEntries : base.archiveEntries,
+  });
+}
+
+export async function getSiteContent(): Promise<SiteContent> {
+  if (CMS_MODE !== "strapi") return withDerivedContent(localSiteContent);
+  if (!STRAPI_URL) return withDerivedContent(localSiteContent);
+
+  const effectiveCacheTtlMs = getEffectiveStrapiCacheTtlMs();
+  const now = Date.now();
+
+  if (cachedStrapiContent && now < cachedStrapiContentExpiresAt) {
+    return cachedStrapiContent;
+  }
+
+  if (cachedStrapiContent) {
+    refreshStrapiContentInBackground();
+    return cachedStrapiContent;
+  }
+
+  if (inFlightStrapiContentRequest) {
+    return inFlightStrapiContentRequest;
+  }
+
   try {
-    const [siteContentResponse, postsResponse] = await Promise.all([
-      fetch(siteContentEndpoint, {
-        headers,
-        cache: "no-store",
-      }),
-      fetch(postsEndpoint, {
-        headers,
-        cache: "no-store",
-      }),
-    ]);
-
-    const normalizedSiteContent = siteContentResponse.ok
-      ? normalizeStrapiPayload(await siteContentResponse.json())
-      : null;
-
-    const base = normalizedSiteContent ? mergeContent(normalizedSiteContent) : localSiteContent;
-
-    const aboutBackground = normalizedSiteContent
-      ? parseUploadedImage((normalizedSiteContent as Record<string, unknown>).aboutBackground, baseUrl)
-      : null;
-
-    if (!postsResponse.ok) {
-      return base;
-    }
-
-    const postsJson = await postsResponse.json();
-    const rawPosts = Array.isArray(postsJson?.data) ? postsJson.data : [];
-    const posts = parsePosts(rawPosts);
-    const buckets = pickLatestPostsByCategory(posts, 9);
-
-    // Enrich local fallback cards with titles from Strapi posts (one-to-one by index)
-    const newsCardsWithTitles = base.newsCards.map((card, i) => ({
-      ...card,
-      title: buckets.news[i]?.title ?? card.title,
-    }));
-
-    // Build Strapi-sourced cards for all news posts.
-    // Images are optional: posts without images still render as text cards.
-    const newsCardsFromPosts = buckets.news
-      .map((post) => {
-        const imagesFromLegacy = parseImageArray(post.images);
-        const imagesFromBlocks = parseMediaImagesFromEventBlocks(post.eventBlocks, baseUrl);
-        const images = imagesFromLegacy.length ? imagesFromLegacy : imagesFromBlocks;
-        return {
-          id: post.id,
-          title: post.title,
-          images: images.slice(0, 2),
-          body: post.body,
-        };
-      });
-
-    const releaseCardsFromPosts = buckets.releases.map((post) => {
-      const image = parseImage(post.image);
-      return {
-        id: post.id,
-        image,
-        credits: parseCredits(post.credits),
-        body: typeof post.body === "string" ? post.body : "",
-      };
-    });
-
-    const eventPostsFromStrapi = parseEventPosts(buckets.events, baseUrl);
-    const homeFeedPostsFromStrapi = buildHomeFeedPosts(posts, baseUrl);
-
-    return {
-      ...base,
-      newsList: buckets.news.length ? buckets.news.map((post) => post.title) : base.newsList,
-      eventsList: buckets.events.length ? buckets.events.map((post) => post.title) : base.eventsList,
-      releaseList: buckets.releases.length ? buckets.releases.map((post) => post.title) : base.releaseList,
-      newsCards: newsCardsFromPosts.length ? newsCardsFromPosts : newsCardsWithTitles,
-      releaseCards: releaseCardsFromPosts.length ? releaseCardsFromPosts : base.releaseCards,
-      eventPosts: eventPostsFromStrapi,
-      homeFeedPosts: homeFeedPostsFromStrapi,
-      about: {
-        ...base.about,
-        backgroundImage: aboutBackground,
-      },
-    };
-  } catch {
-    return localSiteContent;
+    inFlightStrapiContentRequest = refreshStrapiContent();
+    const content = await inFlightStrapiContentRequest;
+    cachedStrapiContentExpiresAt = now + effectiveCacheTtlMs;
+    return content;
+  } catch (error) {
+    console.warn("[15love] Failed to fetch from Strapi, using local fallback:", error instanceof Error ? error.message : String(error));
+    return withDerivedContent(localSiteContent);
+  } finally {
+    inFlightStrapiContentRequest = null;
   }
 }

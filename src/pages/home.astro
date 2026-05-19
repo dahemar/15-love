@@ -4,12 +4,16 @@ import SiteShell from "../components/SiteShell.astro";
 import TennisButton from "../components/TennisButton.astro";
 import PostFeed from "../components/PostFeed.astro";
 import { getSiteContent } from "../lib/siteContent";
+import { getEventPostViews, getNewsPostViews, getReleasePostViews } from "../lib/postViews";
 
 const content = await getSiteContent();
-const news = content.newsList.slice(0, 9);
-const events = content.eventsList.slice(0, 9);
-const releases = content.releaseList.slice(0, 9);
 const homeFeedPosts = content.homeFeedPosts ?? [];
+const news = getNewsPostViews(content).slice(0, 9);
+const events = getEventPostViews(content).slice(0, 9);
+const releases = getReleasePostViews(content).slice(0, 9);
+
+const homeTags = Array.from(new Set(content.archiveEntries.flatMap((entry) => entry.tags))).sort((left, right) => left.localeCompare(right));
+const homeDates = Array.from(new Set(content.archiveEntries.map((entry) => entry.dateLabel).filter(Boolean))).slice(0, 4);
 ---
 
 <BaseLayout title="15 love — Home">
@@ -21,10 +25,10 @@ const homeFeedPosts = content.homeFeedPosts ?? [];
         </div>
         <ul class="list">
           {news.map((item) => (
-            <li class="li"><span class="heart">♡</span><span class="text">{item}</span></li>
+            <li class="li"><span class="heart">♡</span><a class="text postListLink" href={item.href} data-astro-prefetch="hover">{item.title}</a></li>
           ))}
         </ul>
-        <TennisButton class="block-tennis" href="/news" label="Go to news" />
+        <TennisButton class="block-tennis" href="/news" label="Go to news" prefetch="load" />
       </section>
 
       <section class="block block-events">
@@ -33,10 +37,10 @@ const homeFeedPosts = content.homeFeedPosts ?? [];
         </div>
         <ul class="list">
           {events.map((item) => (
-            <li class="li"><span class="heart">♡</span><span class="text">{item}</span></li>
+            <li class="li"><span class="heart">♡</span><a class="text postListLink" href={item.href} data-astro-prefetch="hover">{item.title}</a></li>
           ))}
         </ul>
-        <TennisButton class="block-tennis" href="/events" label="Go to events" />
+        <TennisButton class="block-tennis" href="/events" label="Go to events" prefetch="load" />
       </section>
     </div>
 
@@ -51,24 +55,50 @@ const homeFeedPosts = content.homeFeedPosts ?? [];
         </div>
         <ul class="list">
           {releases.map((item) => (
-            <li class="li"><span class="heart">♡</span><span class="text">{item}</span></li>
+            <li class="li"><span class="heart">♡</span><a class="text postListLink" href={item.href} data-astro-prefetch="hover">{item.title}</a></li>
           ))}
         </ul>
-        <TennisButton class="block-tennis" href="/releases" label="Go to releases" />
+        <TennisButton class="block-tennis" href="/releases" label="Go to releases" prefetch="load" />
       </section>
 
       <section class="block block-tags">
         <div class="blockhead">
           <h2 class="coltitle">tags &amp; dates</h2>
         </div>
-        <div class="tagsText">
-          slim0, jordan playfair, ml buch, ctm, forgiveness, suntub, process, vinyl, vind, cph distillery, velita nobis,
-          incta, dendignia sit, la volenitis, aut am, te earcium, ipsus, esenducipsam, resti-atqui, assus, simagnatis,
-          doluptiat, ...
+        <div class="tagsText tagsLinks">
+          {homeTags.map((tag, index) => (
+            <>
+              <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
+              {index < homeTags.length - 1 ? <span>, </span> : null}
+            </>
+          ))}
         </div>
-        <div class="dates"><div>july ‘24</div><div>june ‘24</div><div>may ‘24</div><div>april ‘24</div></div>
-        <TennisButton class="block-tennis" href="/archive" label="Go to archive" />
+        <div class="dates">
+          {homeDates.map((dateLabel) => (
+            <div><a class="dateLink" href={`/archive?date=${encodeURIComponent(dateLabel)}`} data-astro-prefetch="hover">{dateLabel}</a></div>
+          ))}
+        </div>
+        <TennisButton class="block-tennis" href="/archive" label="Go to archive" prefetch="load" />
       </section>
     </div>
   </SiteShell>
 </BaseLayout>
+
+<style>
+  .tagsLinks {
+    display: block;
+  }
+
+  .tagLink,
+  .dateLink,
+  .postListLink {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .tagLink:hover,
+  .dateLink:hover,
+  .postListLink:hover {
+    text-decoration: underline;
+  }
+</style>

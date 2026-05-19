@@ -4,7 +4,8 @@
 
 @font-face {
   font-family: "Inter";
-  src: url("/fonts/Inter%20Regular-5af3.otf") format("opentype");
+  src: url("/fonts/Inter%20Regular-5af3.woff2") format("woff2"),
+       url("/fonts/Inter%20Regular-5af3.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -12,27 +13,14 @@
 
 @font-face {
   font-family: "TT2020 Style B";
-  src: url("/fonts/TT2020%20Style%20B%20Regular-4409.otf") format("opentype");
+  src: url("/fonts/TT2020%20Style%20B%20Regular-4409.woff2") format("woff2"),
+       url("/fonts/TT2020%20Style%20B%20Regular-4409.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
-@font-face {
-  font-family: "TT2020 Style E";
-  src: url("/fonts/TT2020%20Style%20E%20Regular-af9a.otf") format("opentype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
 
-@font-face {
-  font-family: "Times New Roman";
-  src: url("/fonts/Times%20New%20Roman.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
 
 html,
 body {
