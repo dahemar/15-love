@@ -139,8 +139,8 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-meta {
-    min-width: 320px;
-    width: 320px;
+    min-width: 0;
+    width: 100%;
   }
 
   .release-title {
@@ -158,19 +158,16 @@ const releaseCards = getReleasePostViews(content);
   .release-credits {
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    font-size: 16px;
-    line-height: 1.2;
+    gap: 2px;
     margin-bottom: 14px;
   }
 
-  .credit-label {
+  .credit-line {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.2;
     font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    letter-spacing: 0.2px;
-  }
-
-  .credit-value {
-    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: 0.02em;
   }
 
   .release-body {

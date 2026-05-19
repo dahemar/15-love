@@ -40,6 +40,20 @@ function refreshStrapiContentInBackground() {
 }
 
 type PostCategory = "news" | "events" | "releases";
+
+export const DEFAULT_ABOUT_TEXT = `15 love is a record label
+based in copenhagen, denmark
+to get in touch, send an e-mail to
+info@15love.dk
+looking forward to hearing from you`;
+
+const RELEASE_CREDIT_FIELDS = [
+  { key: "artistName", label: "Artist name:" },
+  { key: "albumTitle", label: "Album title:" },
+  { key: "catalogueNumber", label: "Catalogue number:" },
+  { key: "releaseDateLabel", label: "Release date:" },
+  { key: "format", label: "Format:" },
+] as const;
 type ArchiveEntry = SiteContent["archiveEntries"][number];
 type NewsPost = SiteContent["newsPosts"][number];
 type EventPost = SiteContent["eventPosts"][number];
@@ -765,6 +779,50 @@ function buildEventPosts(items: unknown[], baseUrl: string): EventPost[] {
   return posts;
 }
 
+function releaseDetailsToCredits(details: Record<string, unknown>): ReleaseCard["credits"] {
+  const credits: ReleaseCard["credits"] = [];
+
+  for (const field of RELEASE_CREDIT_FIELDS) {
+    const value = typeof details[field.key] === "string" ? details[field.key].trim() : "";
+    if (value) credits.push({ label: field.label, value });
+  }
+
+  return credits;
+}
+
+function parseReleaseCredits(src: Record<string, unknown>): ReleaseCard["credits"] {
+  const details = parseStrapiEntity(src.releaseDetails);
+  if (details && typeof details === "object") {
+    const fromDetails = releaseDetailsToCredits(details);
+    if (fromDetails.length > 0) return fromDetails;
+  }
+
+  if (!Array.isArray(src.credits)) return [];
+
+  const credits: ReleaseCard["credits"] = [];
+  for (const entry of src.credits) {
+    if (!entry || typeof entry !== "object") continue;
+    const c = entry as Record<string, unknown>;
+    const label = typeof c.label === "string" ? c.label.trim() : "";
+    const value = typeof c.value === "string" ? c.value.trim() : "";
+    if (label && value) credits.push({ label, value });
+  }
+
+  return credits;
+}
+
+function extractAboutTextFromPosts(items: unknown[]): string | null {
+  for (const item of items) {
+    const src = parseStrapiEntity(item);
+    if (src.category !== "about") continue;
+
+    const body = typeof src.body === "string" ? src.body.trim() : "";
+    if (body) return body;
+  }
+
+  return null;
+}
+
 function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
   const cards: ReleaseCard[] = [];
 
@@ -778,17 +836,7 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
     const image = pickPostThumbnail(src, baseUrl);
     const body = typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : "";
     const summary = typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined;
-
-    const credits: ReleaseCard["credits"] = [];
-    if (Array.isArray(src.credits)) {
-      for (const entry of src.credits) {
-        if (!entry || typeof entry !== "object") continue;
-        const c = entry as Record<string, unknown>;
-        const label = typeof c.label === "string" ? c.label.trim() : "";
-        const value = typeof c.value === "string" ? c.value.trim() : "";
-        if (label && value) credits.push({ label, value });
-      }
-    }
+    const credits = parseReleaseCredits(src);
 
     cards.push({
       id: resolvePostId(item, src, title),
@@ -991,10 +1039,12 @@ function mergeContent(raw: unknown, baseUrl: string): SiteContent {
   const base = emptyStrapiSiteContent();
   const bgImage = parseImageLike(src.aboutBackground, baseUrl);
 
+  const aboutText = typeof src.aboutText === "string" ? src.aboutText.trim() : "";
+
   return {
     ...base,
     about: {
-      text: typeof src.aboutText === "string" ? src.aboutText : "",
+      text: aboutText || DEFAULT_ABOUT_TEXT,
       backgroundImage: bgImage ? { src: bgImage.src, alt: bgImage.alt } : null,
     },
   };
@@ -1021,6 +1071,7 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
     "populate[image][fields][3]=height",
     "populate[newsBlocks][populate]=*",
     "populate[eventBlocks][populate]=*",
+    "populate[releaseDetails]=*",
   ].join("&");
   const postsEndpoint = `${baseUrl}/api/posts?${postsQuery}`;
 
@@ -1043,7 +1094,7 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
     throw new Error(`[15love] Strapi site-content returned ${siteContentResponse.status}`);
   }
 
-  const base = mergeContent(normalizeStrapiPayload(await siteContentResponse.json()), baseUrl);
+  const merged = mergeContent(normalizeStrapiPayload(await siteContentResponse.json()), baseUrl);
 
   if (!postsResponse.ok) {
     throw new Error(`[15love] Strapi posts returned ${postsResponse.status}`);
@@ -1051,6 +1102,14 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
 
   const postsJson = await postsResponse.json();
   const posts = Array.isArray(postsJson?.data) ? postsJson.data : [];
+  const aboutFromPost = extractAboutTextFromPosts(posts);
+  const base = {
+    ...merged,
+    about: {
+      ...merged.about,
+      text: aboutFromPost || merged.about.text || DEFAULT_ABOUT_TEXT,
+    },
+  };
   const archiveEntries = buildArchiveEntries(posts, baseUrl);
   const newsPosts = buildNewsPosts(posts, baseUrl);
   const eventPosts = buildEventPosts(posts, baseUrl);
