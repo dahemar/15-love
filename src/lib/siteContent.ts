@@ -1,10 +1,11 @@
 import { localSiteContent, type SiteContent } from "../data/siteContent";
+import { isDeployBuild, resolveCmsMode, resolveStrapiToken, resolveStrapiUrl } from "./cmsConfig";
 import { getLocalThumbSrc } from "./localAssetThumbs";
 import { buildPostHref } from "./postRoutes";
 
-const CMS_MODE = (import.meta.env.CMS_MODE ?? "local").toLowerCase();
-const STRAPI_URL = import.meta.env.STRAPI_URL;
-const STRAPI_TOKEN = import.meta.env.STRAPI_TOKEN;
+const CMS_MODE = resolveCmsMode();
+const STRAPI_URL = resolveStrapiUrl();
+const STRAPI_TOKEN = resolveStrapiToken();
 const STRAPI_CACHE_TTL_MS = Number(import.meta.env.STRAPI_CACHE_TTL_MS ?? (import.meta.env.DEV ? "0" : "60000"));
 const STRAPI_DEV_BURST_CACHE_TTL_MS = Number(import.meta.env.STRAPI_DEV_BURST_CACHE_TTL_MS ?? "1000");
 
@@ -969,26 +970,33 @@ function withDerivedContent(content: SiteContent): SiteContent {
   };
 }
 
+function emptyStrapiSiteContent(): SiteContent {
+  return {
+    newsList: [],
+    newsPosts: [],
+    eventsList: [],
+    newsCards: [],
+    newsFlowText: "",
+    releaseList: [],
+    releaseCards: [],
+    eventPosts: [],
+    homeFeedPosts: [],
+    about: { text: "", backgroundImage: null },
+    archiveEntries: [],
+  };
+}
+
 function mergeContent(raw: unknown, baseUrl: string): SiteContent {
   const src = (raw ?? {}) as Record<string, unknown>;
-
+  const base = emptyStrapiSiteContent();
   const bgImage = parseImageLike(src.aboutBackground, baseUrl);
 
   return {
-    newsList: localSiteContent.newsList,
-    newsPosts: localSiteContent.newsPosts,
-    eventsList: localSiteContent.eventsList,
-    newsCards: localSiteContent.newsCards,
-    newsFlowText: localSiteContent.newsFlowText,
-    releaseList: localSiteContent.releaseList,
-    releaseCards: localSiteContent.releaseCards,
-    eventPosts: localSiteContent.eventPosts,
-    homeFeedPosts: [],
+    ...base,
     about: {
-      text: typeof src.aboutText === "string" && src.aboutText.trim().length > 0 ? src.aboutText : localSiteContent.about.text,
-      backgroundImage: bgImage ? { src: bgImage.src, alt: bgImage.alt } : localSiteContent.about.backgroundImage,
+      text: typeof src.aboutText === "string" ? src.aboutText : "",
+      backgroundImage: bgImage ? { src: bgImage.src, alt: bgImage.alt } : null,
     },
-    archiveEntries: localSiteContent.archiveEntries,
   };
 }
 
@@ -1031,10 +1039,14 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
     }),
   ]);
 
-  const base = siteContentResponse.ok ? mergeContent(normalizeStrapiPayload(await siteContentResponse.json()), baseUrl) : localSiteContent;
+  if (!siteContentResponse.ok) {
+    throw new Error(`[15love] Strapi site-content returned ${siteContentResponse.status}`);
+  }
+
+  const base = mergeContent(normalizeStrapiPayload(await siteContentResponse.json()), baseUrl);
+
   if (!postsResponse.ok) {
-    console.warn(`[15love] Posts endpoint returned ${postsResponse.status} — using fallback data`);
-    return withDerivedContent(base);
+    throw new Error(`[15love] Strapi posts returned ${postsResponse.status}`);
   }
 
   const postsJson = await postsResponse.json();
@@ -1046,16 +1058,30 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
 
   return withDerivedContent({
     ...base,
-    newsPosts: newsPosts.length ? newsPosts : base.newsPosts,
-    eventPosts: eventPosts.length ? eventPosts : base.eventPosts,
-    releaseCards: releaseCards.length ? releaseCards : base.releaseCards,
-    archiveEntries: archiveEntries.length ? archiveEntries : base.archiveEntries,
+    newsPosts,
+    eventPosts,
+    releaseCards,
+    archiveEntries,
   });
 }
 
 export async function getSiteContent(): Promise<SiteContent> {
   if (CMS_MODE !== "strapi") return withDerivedContent(localSiteContent);
-  if (!STRAPI_URL) return withDerivedContent(localSiteContent);
+  if (!STRAPI_URL) {
+    if (isDeployBuild()) {
+      throw new Error("[15love] STRAPI_URL is missing during deploy build");
+    }
+    return withDerivedContent(localSiteContent);
+  }
+
+  if (!STRAPI_TOKEN) {
+    if (isDeployBuild()) {
+      throw new Error(
+        "[15love] STRAPI_TOKEN is missing during deploy build. Add it in Vercel → Settings → Environment Variables.",
+      );
+    }
+    console.warn("[15love] STRAPI_TOKEN is not set — Strapi may return 403");
+  }
 
   const effectiveCacheTtlMs = getEffectiveStrapiCacheTtlMs();
   const now = Date.now();
@@ -1079,7 +1105,11 @@ export async function getSiteContent(): Promise<SiteContent> {
     cachedStrapiContentExpiresAt = now + effectiveCacheTtlMs;
     return content;
   } catch (error) {
-    console.warn("[15love] Failed to fetch from Strapi, using local fallback:", error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    if (isDeployBuild()) {
+      throw new Error(`[15love] Strapi fetch failed during deploy build: ${message}`);
+    }
+    console.warn("[15love] Failed to fetch from Strapi, using local fallback:", message);
     return withDerivedContent(localSiteContent);
   } finally {
     inFlightStrapiContentRequest = null;

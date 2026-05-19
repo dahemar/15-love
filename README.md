@@ -1,43 +1,41 @@
-# Astro Starter Kit: Minimal
+# 15 love — site
+
+Astro static site. Content comes from **Strapi on Render** at build time (same as local when `.env` is configured).
+
+## Local development
 
 ```sh
-npm create astro@latest -- --template minimal
+cp .env.example .env
+# Paste your STRAPI_TOKEN into .env
+npm install
+npm run dev
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+Verify Strapi:
 
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+```sh
+npm run cms:check
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Deploy (Vercel + GitHub)
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+The repo does **not** commit `.env`. Vercel must have the same variables as your local `.env`:
 
-Any static assets, like images, can be placed in the `public/` directory.
+| Variable | Value |
+| -------- | ----- |
+| `CMS_MODE` | `strapi` (also set in `vercel.json`) |
+| `STRAPI_URL` | `https://strapi-client-15-love.onrender.com` (also in `vercel.json`) |
+| `STRAPI_TOKEN` | **You must add this in Vercel** → Project → Settings → Environment Variables (Production, Preview, Development) |
 
-## 🧞 Commands
+Without `STRAPI_TOKEN`, the build fails on purpose instead of publishing stale local/Lorem content.
 
-All commands are run from the root of the project, from a terminal:
+After adding the token, redeploy from the Vercel dashboard or push to `main`.
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+## Commands
 
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+| Command | Action |
+| ------- | ------ |
+| `npm run dev` | Dev server at `localhost:4321` |
+| `npm run build` | Production build (fetches Strapi) |
+| `npm run preview` | Preview `./dist/` |
+| `npm run cms:check` | Test Strapi credentials |

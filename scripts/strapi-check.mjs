@@ -1,6 +1,12 @@
-const mode = (process.env.CMS_MODE ?? "local").toLowerCase();
-const url = process.env.STRAPI_URL;
-const token = process.env.STRAPI_TOKEN;
+const mode = (
+  process.env.CMS_MODE ??
+  (process.env.STRAPI_URL || process.env.VERCEL || process.env.CI ? "strapi" : "local")
+).toLowerCase();
+const url = (
+  process.env.STRAPI_URL ??
+  (process.env.VERCEL || process.env.CI ? "https://strapi-client-15-love.onrender.com" : "")
+).replace(/\/+$/, "");
+const token = process.env.STRAPI_TOKEN?.trim();
 
 if (mode !== "strapi") {
   console.log("CMS_MODE is not 'strapi'. Current mode:", mode);
@@ -12,26 +18,23 @@ if (!url) {
   process.exit(1);
 }
 
-const endpoint = `${url.replace(/\/+$/, "")}/api/site-content`;
-
-try {
-  const response = await fetch(endpoint, {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    console.error(`Strapi check failed: ${response.status} ${response.statusText}`);
-    process.exit(1);
-  }
-
-  const json = await response.json();
-  const hasData = !!(json?.data?.attributes || json?.data || json);
-  console.log("Strapi reachable:", endpoint);
-  console.log("Payload detected:", hasData ? "yes" : "no");
-  process.exit(0);
-} catch (error) {
-  console.error("Strapi check failed:", error instanceof Error ? error.message : error);
+if (!token) {
+  console.error("Missing STRAPI_TOKEN in environment (required — Strapi returns 403 without it).");
   process.exit(1);
 }
+
+const endpoint = `${url}/api/site-content`;
+const response = await fetch(endpoint, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+
+if (!response.ok) {
+  console.error(`Strapi unreachable: ${response.status} ${response.statusText}`);
+  console.error("Endpoint:", endpoint);
+  process.exit(1);
+}
+
+const json = await response.json();
+const hasPayload = Boolean(json?.data);
+console.log("Strapi reachable:", endpoint);
+console.log("Payload detected:", hasPayload ? "yes" : "no");
