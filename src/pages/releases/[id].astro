@@ -90,45 +90,41 @@ function renderReleaseBody(value?: string): string {
               decoding="async"
               fetchpriority="high"
             />
-          ) : (
-            <div class="release-image release-image-empty" aria-hidden="true"></div>
-          )}
-          <div class="release-meta">
-            <h1 class="sr-only">{post.title}</h1>
-            {post.credits.length ? (
-              <div class="release-credits" aria-label="Release information">
-                {post.credits.map((credit) => (
-                  <p class="credit-line">
-                    <span class="credit-label">{credit.label}</span>{" "}
-                    <span class="credit-value">{credit.value}</span>
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            {post.body ? <div class="release-body" set:html={renderReleaseBody(post.body)} /> : null}
-            {post.links.length ? (
-              <nav class="release-links" aria-label="Release links">
-                {post.links.map((link, index) => (
+          ) : null}
+          <h1 class="sr-only">{post.title}</h1>
+          {post.credits.length ? (
+            <div class="release-credits" aria-label="Release information">
+              {post.credits.map((credit) => (
+                <p class="credit-line">
+                  <span class="credit-label">{credit.label}</span>{" "}
+                  <span class="credit-value">{credit.value}</span>
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {post.body ? <div class="release-body" set:html={renderReleaseBody(post.body)} /> : null}
+          {post.links.length ? (
+            <nav class="release-links" aria-label="Release links">
+              {post.links.map((link, index) => (
+                <>
+                  <a class="release-link" href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a>
+                  {index < post.links.length - 1 ? <span class="release-link-sep">, </span> : null}
+                </>
+              ))}
+            </nav>
+          ) : null}
+          {post.tags && post.tags.length ? (
+            <footer class="post-tags">
+              <div class="tagsText tagsLinks">
+                {post.tags.map((tag, index) => (
                   <>
-                    <a class="release-link" href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a>
-                    {index < post.links.length - 1 ? <span class="release-link-sep">, </span> : null}
+                    <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
+                    {index < post.tags.length - 1 ? <span>, </span> : null}
                   </>
                 ))}
-              </nav>
-            ) : null}
-            {post.tags && post.tags.length ? (
-              <footer class="post-tags">
-                <div class="tagsText tagsLinks">
-                  {post.tags.map((tag, index) => (
-                    <>
-                      <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
-                      {index < post.tags.length - 1 ? <span>, </span> : null}
-                    </>
-                  ))}
-                </div>
-              </footer>
-            ) : null}
-          </div>
+              </div>
+            </footer>
+          ) : null}
         </article>
       </section>
     </div>
@@ -183,36 +179,26 @@ function renderReleaseBody(value?: string): string {
   }
 
   .release-detail {
-    display: grid;
-    grid-template-columns: minmax(280px, 42%) 1fr;
-    column-gap: 18px;
-    align-items: start;
-    padding: 16px;
+    padding: 16px 56px 16px 16px;
+    overflow: hidden;
+  }
+
+  .release-detail::after {
+    content: "";
+    display: block;
+    clear: both;
   }
 
   .release-image {
-    width: 100%;
+    float: left;
+    width: min(42%, 420px);
     max-width: 420px;
     height: auto;
-    min-height: 420px;
     max-height: 520px;
+    margin: 0 18px 12px 0;
     object-fit: cover;
     border: 1px solid #000;
     display: block;
-  }
-
-  .release-image-empty {
-    min-height: 420px;
-    background: transparent;
-  }
-
-  .release-meta {
-    min-width: 280px;
-    max-width: 720px;
-    padding-right: 56px;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
   }
 
   .sr-only {
