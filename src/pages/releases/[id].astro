@@ -23,6 +23,31 @@ const backHref = "/releases/";
 if (!post) {
   throw new Error(`Unknown release post: ${Astro.params.id}`);
 }
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function isHtmlLike(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function plainTextToHtml(value: string): string {
+  return value
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll("\n", "<br />")}</p>`)
+    .join("");
+}
+
+function renderReleaseBody(value?: string): string {
+  if (!value) return "";
+  return isHtmlLike(value) ? value : plainTextToHtml(value);
+}
 ---
 
 <BaseLayout title={`15 love — ${post.title}`}>
@@ -80,23 +105,7 @@ if (!post) {
                 ))}
               </div>
             ) : null}
-            {post.body ? <p class="release-body">{post.body}</p> : null}
-            {post.extras.map((extra) => (
-              <section class="release-extra">
-                {extra.text ? <p class="release-extra-text">{extra.text}</p> : null}
-                {extra.image?.src ? (
-                  <img
-                    class="release-extra-image"
-                    src={extra.image.src}
-                    alt={extra.image.alt}
-                    width="120"
-                    height="120"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : null}
-              </section>
-            ))}
+            {post.body ? <div class="release-body" set:html={renderReleaseBody(post.body)} /> : null}
             {post.links.length ? (
               <nav class="release-links" aria-label="Release links">
                 {post.links.map((link, index) => (
@@ -247,26 +256,12 @@ if (!post) {
     line-height: 1.28;
   }
 
-  .release-extra {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 14px;
-    align-items: start;
-    margin-bottom: 14px;
+  .release-body :global(p) {
+    margin: 0 0 0.55em;
   }
 
-  .release-extra-text {
-    margin: 0;
-    font-size: 15.4px;
-    line-height: 1.28;
-  }
-
-  .release-extra-image {
-    width: 120px;
-    height: 120px;
-    object-fit: cover;
-    border: 1px solid #000;
-    display: block;
+  .release-body :global(p:last-child) {
+    margin-bottom: 0;
   }
 
   .release-links {

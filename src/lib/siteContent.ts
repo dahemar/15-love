@@ -176,6 +176,10 @@ function splitNewsSectionBody(value: string): string[] {
     .filter(Boolean);
 }
 
+function isNewsMediaComponent(value: unknown): boolean {
+  return value === "media" || value === "news.media";
+}
+
 function pushNewsMediaBlock(
   parsedBlocks: NewsPost["newsBlocks"],
   image: { src: string; alt: string; width?: number; height?: number },
@@ -188,7 +192,7 @@ function pushNewsMediaBlock(
   },
 ) {
   const block: NewsPost["newsBlocks"][number] = {
-    __component: "news.media",
+    __component: "media",
     id: typeof options.id === "number" ? options.id : parsedBlocks.length + 1,
     image: {
       url: image.src,
@@ -218,58 +222,8 @@ function pushNewsRichTextBlock(parsedBlocks: NewsPost["newsBlocks"], body: strin
   });
 }
 
-type ParsedNewsSectionFields = {
-  body?: string;
-  id?: unknown;
-  image?: unknown;
-  imageUrl?: unknown;
-  imageAlt?: unknown;
-  caption?: unknown;
-  imagePosition?: unknown;
-  imageWidth?: unknown;
-  imageParagraph?: unknown;
-};
-
-function pushNewsSectionBlocks(
-  parsedBlocks: NewsPost["newsBlocks"],
-  fields: ParsedNewsSectionFields,
-  baseUrl: string,
-) {
-  const body = typeof fields.body === "string" ? fields.body.trim() : "";
-  const image = parseImageSource(fields.image, baseUrl, fields.imageUrl, fields.imageAlt ?? fields.caption);
-  const sections = body ? splitNewsSectionBody(body) : [];
-  const imageParagraph =
-    typeof fields.imageParagraph === "number" && fields.imageParagraph > 0 && sections.length > 0
-      ? Math.min(fields.imageParagraph, sections.length)
-      : 1;
-
-  if (sections.length > 0) {
-    for (const [index, section] of sections.entries()) {
-      if (image && index === imageParagraph - 1) {
-        pushNewsMediaBlock(parsedBlocks, image, {
-          caption: fields.caption,
-          imagePosition: fields.imagePosition,
-          imageWidth: fields.imageWidth,
-        });
-      }
-
-      pushNewsRichTextBlock(parsedBlocks, section, index === 0 ? fields.id : undefined);
-    }
-    return;
-  }
-
-  if (image) {
-    pushNewsMediaBlock(parsedBlocks, image, {
-      caption: fields.caption,
-      imagePosition: fields.imagePosition,
-      imageWidth: fields.imageWidth,
-    });
-  }
-  if (body) pushNewsRichTextBlock(parsedBlocks, body, fields.id);
-}
-
 type NewsRichTextBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "news.rich-text" }>;
-type NewsMediaBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "news.media" }>;
+type NewsMediaBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "media" }>;
 
 function pushNewsMediaFromBlock(parsedBlocks: NewsPost["newsBlocks"], media: NewsMediaBlockParsed) {
   if (!media.image) return;
@@ -291,14 +245,14 @@ function pushNewsMediaFromBlock(parsedBlocks: NewsPost["newsBlocks"], media: New
   );
 }
 
-/** body + one or more media blocks → interleave like news.section (images float in text flow). */
+/** body + one or more media blocks → interleave images in text flow. */
 function coalesceBodyWithMediaBlocks(parsedBlocks: NewsPost["newsBlocks"]): NewsPost["newsBlocks"] {
   const richBlocks = parsedBlocks.filter(
     (block): block is NewsRichTextBlockParsed =>
       block.__component === "news.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
   );
   const mediaBlocks = parsedBlocks.filter(
-    (block): block is NewsMediaBlockParsed => block.__component === "news.media" && !!block.image,
+    (block): block is NewsMediaBlockParsed => block.__component === "media" && !!block.image,
   );
 
   if (richBlocks.length !== 1 || mediaBlocks.length === 0) return parsedBlocks;
@@ -341,7 +295,7 @@ function coalesceBodyWithMediaBlocks(parsedBlocks: NewsPost["newsBlocks"]): News
 function finalizeNewsBlocks(parsedBlocks: NewsPost["newsBlocks"], src: Record<string, unknown>, baseUrl: string) {
   ensureTopLevelNewsBody(parsedBlocks, src);
 
-  const hasInlineMedia = parsedBlocks.some((block) => block.__component === "news.media" && !!block.image);
+  const hasInlineMedia = parsedBlocks.some((block) => block.__component === "media" && !!block.image);
   if (!hasInlineMedia) {
     const fallbackTopLevelImage = parseImageLike(src.image, baseUrl);
     if (fallbackTopLevelImage) {
@@ -386,11 +340,6 @@ function appendNewsBlocksFromEventBlocks(parsedBlocks: NewsPost["newsBlocks"], s
     if (!block || typeof block !== "object") continue;
     const parsed = parseStrapiEntity(block);
 
-    if (parsed.__component === "news.section" || parsed.__component === "events.news-section") {
-      pushNewsSectionBlocks(parsedBlocks, parsed, baseUrl);
-      continue;
-    }
-
     if (parsed.__component === "events.rich-text") {
       const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
       if (!body) continue;
@@ -402,9 +351,7 @@ function appendNewsBlocksFromEventBlocks(parsedBlocks: NewsPost["newsBlocks"], s
       const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
       if (!image) continue;
       const alreadyHasSameImage = parsedBlocks.some(
-        (existing) =>
-          existing.__component === "news.media" &&
-          existing.image?.url === image.src,
+        (existing) => existing.__component === "media" && existing.image?.url === image.src,
       );
       if (alreadyHasSameImage) continue;
       pushNewsMediaBlock(parsedBlocks, image, {
@@ -468,7 +415,7 @@ function pickPostThumbnail(src: Record<string, unknown>, baseUrl: string): { src
     for (const block of src.newsBlocks) {
       if (!block || typeof block !== "object") continue;
       const parsed = parseStrapiEntity(block);
-      if (parsed.__component !== "news.media") continue;
+      if (!isNewsMediaComponent(parsed.__component)) continue;
       const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
       if (image) return { src: image.src, alt: image.alt };
     }
@@ -593,12 +540,7 @@ function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPos
         continue;
       }
 
-      if (parsed.__component === "news.section") {
-        pushNewsSectionBlocks(parsedBlocks, parsed, baseUrl);
-        continue;
-      }
-
-      if (parsed.__component === "news.media") {
+      if (isNewsMediaComponent(parsed.__component)) {
         const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
         if (!image) continue;
         pushNewsMediaBlock(parsedBlocks, image, {
@@ -606,6 +548,7 @@ function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPos
           caption: parsed.caption,
           imagePosition: parsed.imagePosition,
           imageWidth: parsed.imageWidth,
+          imageParagraph: parsed.imageParagraph,
         });
       }
     }
@@ -833,46 +776,6 @@ function parseCreditsFromBody(body: string): { credits: ReleaseCard["credits"]; 
   return { credits, remainder: remainder.join("\n\n") };
 }
 
-function pickReleasePrimaryImage(
-  src: Record<string, unknown>,
-  extras: ReleaseCard["extras"],
-  baseUrl: string,
-): { src: string; alt: string } | null {
-  for (const extra of extras) {
-    if (extra.image?.src) return extra.image;
-  }
-
-  return pickPostThumbnail(src, baseUrl);
-}
-
-function withoutPrimaryImageExtra(
-  extras: ReleaseCard["extras"],
-  primary: { src: string; alt: string } | null,
-): ReleaseCard["extras"] {
-  if (!primary) return extras;
-
-  return extras.filter((extra) => {
-    if (!extra.image?.src || extra.image.src !== primary.src) return true;
-    return !!extra.text?.trim();
-  });
-}
-
-function parseReleaseExtras(src: Record<string, unknown>, baseUrl: string): ReleaseCard["extras"] {
-  if (!Array.isArray(src.releaseExtras)) return [];
-
-  const extras: ReleaseCard["extras"] = [];
-  for (const entry of src.releaseExtras) {
-    if (!entry || typeof entry !== "object") continue;
-    const parsed = parseStrapiEntity(entry);
-    const text = typeof parsed.text === "string" ? parsed.text.trim() : "";
-    const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt);
-    if (!text && !image) continue;
-    extras.push({ text, image: image ? { src: image.src, alt: image.alt } : null });
-  }
-
-  return extras;
-}
-
 function parseReleaseLinks(src: Record<string, unknown>): ReleaseCard["links"] {
   if (!Array.isArray(src.releaseLinks)) return [];
 
@@ -934,7 +837,6 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
     const summary = typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined;
     let body = typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : "";
     let credits = parseReleaseCredits(src);
-    const extras = parseReleaseExtras(src, baseUrl);
     const links = parseReleaseLinks(src);
 
     if (credits.length === 0 && body) {
@@ -945,8 +847,7 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
       }
     }
 
-    const primaryImage = pickReleasePrimaryImage(src, extras, baseUrl);
-    const displayExtras = withoutPrimaryImageExtra(extras, primaryImage);
+    const image = pickPostThumbnail(src, baseUrl);
 
     cards.push({
       id: resolvePostId(item, src, title),
@@ -954,10 +855,9 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
       title,
       summary,
       publishedAt: resolvePostDate(src),
-      image: primaryImage ?? { src: "", alt: title },
+      image: image ?? { src: "", alt: title },
       credits,
       body,
-      extras: displayExtras,
       links,
     });
   }
@@ -977,8 +877,8 @@ function getNewsExcerpt(post: NewsPost): string {
 
 function getNewsImage(post: NewsPost): SiteContent["homeFeedPosts"][number]["image"] {
   const media = post.newsBlocks.find(
-    (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "news.media" }> =>
-      block.__component === "news.media" && !!block.image,
+    (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "media" }> =>
+      block.__component === "media" && !!block.image,
   );
   if (!media || !media.image) return null;
   return { src: media.image.url, alt: media.image.alt };
@@ -1179,10 +1079,6 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
     "populate[newsBlocks][populate]=*",
     "populate[eventBlocks][populate]=*",
     "populate[releaseDetails]=*",
-    "populate[releaseExtras][populate][image][fields][0]=url",
-    "populate[releaseExtras][populate][image][fields][1]=alternativeText",
-    "populate[releaseExtras][populate][image][fields][2]=width",
-    "populate[releaseExtras][populate][image][fields][3]=height",
     "populate[releaseLinks]=*",
   ].join("&");
   const postsEndpoint = `${baseUrl}/api/posts?${postsQuery}`;
