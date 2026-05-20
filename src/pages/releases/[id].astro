@@ -180,12 +180,11 @@ function renderReleaseBody(value?: string): string {
 
   .release-detail {
     padding: 16px 56px 16px 16px;
-    overflow: hidden;
   }
 
   .release-detail::after {
     content: "";
-    display: block;
+    display: table;
     clear: both;
   }
 
@@ -194,11 +193,11 @@ function renderReleaseBody(value?: string): string {
     width: min(42%, 420px);
     max-width: 420px;
     height: auto;
-    max-height: 520px;
-    margin: 0 18px 12px 0;
+    margin: 0 18px 10px 0;
     object-fit: cover;
     border: 1px solid #000;
     display: block;
+    shape-outside: margin-box;
   }
 
   .sr-only {
@@ -214,16 +213,14 @@ function renderReleaseBody(value?: string): string {
   }
 
   .release-credits {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    margin: 0 0 14px;
-    font-size: 16px;
-    line-height: 1.2;
+    display: contents;
   }
 
   .credit-line {
-    margin: 0;
+    display: block;
+    margin: 0 0 1px;
+    font-size: 16px;
+    line-height: 1.2;
   }
 
   .credit-label {
@@ -237,13 +234,18 @@ function renderReleaseBody(value?: string): string {
   }
 
   .release-body {
-    margin: 0 0 14px;
-    font-size: 15.4px;
-    line-height: 1.28;
+    display: contents;
+  }
+
+  .release-body :global(> div) {
+    display: contents;
   }
 
   .release-body :global(p) {
+    display: block;
     margin: 0 0 0.55em;
+    font-size: 15.4px;
+    line-height: 1.28;
   }
 
   .release-body :global(p:last-child) {
