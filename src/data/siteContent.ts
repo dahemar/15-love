@@ -1,3 +1,5 @@
+import type { NewsImageWidth } from "../lib/newsImageWidth";
+
 export type NewsImage = { src: string; alt: string };
 
 export type NewsRichTextBlock = {
@@ -12,7 +14,7 @@ export type NewsMediaBlock = {
   image: { url: string; alt: string; width?: number; height?: number } | null;
   caption?: string;
   imagePosition: "left" | "right" | "center" | "full";
-  imageWidth: "narrow" | "medium" | "wide";
+  imageWidth: NewsImageWidth;
   imageParagraph?: number;
 };
 
