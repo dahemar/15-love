@@ -1,0 +1,310 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import SiteShell from "../../components/SiteShell.astro";
+import { getSiteContent } from "../../lib/siteContent";
+import { getReleasePostViews } from "../../lib/postViews";
+
+export async function getStaticPaths() {
+  const content = await getSiteContent();
+  return getReleasePostViews(content).flatMap((post) => {
+    const paths = [{ params: { id: post.id } }];
+    if (post.legacyId && post.legacyId !== post.id) {
+      paths.push({ params: { id: post.legacyId } });
+    }
+    return paths;
+  });
+}
+
+const content = await getSiteContent();
+const posts = getReleasePostViews(content);
+const post = posts.find((entry) => entry.id === Astro.params.id || entry.legacyId === Astro.params.id);
+const backHref = "/releases/";
+
+if (!post) {
+  throw new Error(`Unknown release post: ${Astro.params.id}`);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function isHtmlLike(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function plainTextToHtml(value: string): string {
+  return value
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll("\n", "<br />")}</p>`)
+    .join("");
+}
+
+function renderReleaseBody(value?: string): string {
+  if (!value) return "";
+  return isHtmlLike(value) ? value : plainTextToHtml(value);
+}
+---
+
+<BaseLayout title={`15 love — ${post.title}`}>
+  <SiteShell activeTab="releases">
+    <div slot="left" class="colblock colblock-left releases-left">
+      <section class="block block-releases-list">
+        <div class="blockhead">
+          <h2 class="coltitle">releases</h2>
+        </div>
+        <ul class="list">
+          {posts.map((item) => (
+            <li class="li">
+              <span class="heart">♡</span>
+              <a class={`text release-list-link${item.id === post.id ? " is-active" : ""}`} href={item.href} data-astro-prefetch="hover">{item.title}</a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+
+    <div slot="center" class="releases-wide">
+      <section class="releases-detail-box" aria-label="Release detail">
+        <a
+          class="detail-back"
+          href={backHref}
+          aria-label="Back to releases"
+          onclick={`if (window.history.length > 1) { window.history.back(); return false; }`}
+        >
+          <span aria-hidden="true">←</span>
+        </a>
+        <article class="release-detail">
+          {post.image?.src ? (
+            <img
+              class="release-image"
+              src={post.image.src}
+              alt={post.image.alt}
+              width="420"
+              height="520"
+              loading="eager"
+              decoding="async"
+              fetchpriority="high"
+            />
+          ) : null}
+          <h1 class="sr-only">{post.title}</h1>
+          {post.credits.length ? (
+            <div class="release-credits" aria-label="Release information">
+              {post.credits.map((credit) => (
+                <p class="credit-line">
+                  <span class="credit-label">{credit.label}</span>{" "}
+                  <span class="credit-value">{credit.value}</span>
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {post.body ? <div class="release-body" set:html={renderReleaseBody(post.body)} /> : null}
+          {post.links.length ? (
+            <nav class="release-links" aria-label="Release links">
+              {post.links.map((link, index) => (
+                <>
+                  <a class="release-link" href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a>
+                  {index < post.links.length - 1 ? <span class="release-link-sep">, </span> : null}
+                </>
+              ))}
+            </nav>
+          ) : null}
+          {post.tags && post.tags.length ? (
+            <footer class="post-tags">
+              <div class="tagsText tagsLinks">
+                {post.tags.map((tag, index) => (
+                  <>
+                    <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
+                    {index < post.tags.length - 1 ? <span>, </span> : null}
+                  </>
+                ))}
+              </div>
+            </footer>
+          ) : null}
+        </article>
+      </section>
+    </div>
+  </SiteShell>
+</BaseLayout>
+
+<style>
+  .releases-left {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .releases-left .block-releases-list {
+    flex: 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .releases-wide {
+    height: 100%;
+  }
+
+  .releases-detail-box {
+    position: relative;
+    border: 1px solid #000;
+    height: 100%;
+    background: #fff;
+    overflow-y: auto;
+  }
+
+  .detail-back {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid #000;
+    background: #fff;
+    color: #000;
+    text-decoration: none;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .detail-back:hover {
+    background: #fff;
+  }
+
+  .release-detail {
+    padding: 16px 56px 16px 16px;
+  }
+
+  .release-detail::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+
+  .release-image {
+    float: left;
+    width: min(42%, 420px);
+    max-width: 420px;
+    height: auto;
+    margin: 0 18px 10px 0;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+    shape-outside: margin-box;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .release-credits {
+    display: contents;
+  }
+
+  .credit-line {
+    display: block;
+    margin: 0 0 1px;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .credit-label {
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: 0.02em;
+  }
+
+  .credit-value {
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: normal;
+  }
+
+  .release-body {
+    display: contents;
+  }
+
+  .release-body :global(> div) {
+    display: contents;
+  }
+
+  .release-body :global(p) {
+    display: block;
+    margin: 0 0 0.55em;
+    font-size: 15.4px;
+    line-height: 1.28;
+  }
+
+  .release-body :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .release-links {
+    margin: 4px 0 0;
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+  }
+
+  .release-link {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .release-link:hover {
+    text-decoration: underline;
+  }
+
+  .release-link-sep {
+    color: #000;
+  }
+
+  .release-list-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .release-list-link:hover,
+  .release-list-link.is-active {
+    text-decoration: underline;
+  }
+
+  .post-tags {
+    margin-top: 16px;
+  }
+
+  .post-tags .tagsText {
+    display: inline-block;
+    margin-top: 0;
+    padding: 8px 10px;
+    border: 1px solid #000;
+    background: #fff;
+  }
+
+  .tagsLinks {
+    display: block;
+  }
+
+  .tagLink {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .tagLink:hover {
+    text-decoration: underline;
+  }
+</style>
