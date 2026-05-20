@@ -1,7 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
-import { getLocalThumbSrc } from "../lib/localAssetThumbs";
 import { getSiteContent } from "../lib/siteContent";
 import { getReleasePostViews } from "../lib/postViews";
 
@@ -37,7 +36,7 @@ const releaseCards = getReleasePostViews(content);
                   {card.image ? (
                     <img
                       class="release-image"
-                      src={getLocalThumbSrc(card.image.src)}
+                      src={card.image.src}
                       alt={card.image.alt}
                       width="340"
                       height="340"
@@ -160,14 +159,22 @@ const releaseCards = getReleasePostViews(content);
     flex-direction: column;
     gap: 2px;
     margin-bottom: 14px;
+    font-size: 16px;
+    line-height: 1.2;
   }
 
   .credit-line {
     margin: 0;
-    font-size: 16px;
-    line-height: 1.2;
+  }
+
+  .credit-label {
     font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     letter-spacing: 0.02em;
+  }
+
+  .credit-value {
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: normal;
   }
 
   .release-body {

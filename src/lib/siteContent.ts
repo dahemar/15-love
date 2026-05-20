@@ -1,13 +1,11 @@
-import { localSiteContent, type SiteContent } from "../data/siteContent";
-import { isDeployBuild, resolveCmsMode, resolveStrapiToken, resolveStrapiUrl } from "./cmsConfig";
-import { getLocalThumbSrc } from "./localAssetThumbs";
+import type { SiteContent } from "../data/siteContent";
+import { resolveStrapiToken, resolveStrapiUrl } from "./cmsConfig";
 import { normalizeNewsImageWidth } from "./newsImageWidth";
 import { buildPostHref } from "./postRoutes";
 
 export { normalizeNewsImageWidth } from "./newsImageWidth";
 export type { NewsImageWidth } from "./newsImageWidth";
 
-const CMS_MODE = resolveCmsMode();
 const STRAPI_URL = resolveStrapiUrl();
 const STRAPI_TOKEN = resolveStrapiToken();
 const STRAPI_CACHE_TTL_MS = Number(import.meta.env.STRAPI_CACHE_TTL_MS ?? (import.meta.env.DEV ? "0" : "60000"));
@@ -36,7 +34,10 @@ function refreshStrapiContentInBackground() {
   inFlightStrapiContentRequest = refreshStrapiContent()
     .catch((error) => {
       console.warn("[15love] Background refresh from Strapi failed:", error instanceof Error ? error.message : String(error));
-      return cachedStrapiContent ?? withDerivedContent(localSiteContent);
+      if (!cachedStrapiContent) {
+        throw error;
+      }
+      return cachedStrapiContent;
     })
     .finally(() => {
       inFlightStrapiContentRequest = null;
@@ -789,6 +790,104 @@ function releaseDetailsToCredits(details: Record<string, unknown>): ReleaseCard[
   return credits;
 }
 
+function parseCreditsFromBody(body: string): { credits: ReleaseCard["credits"]; remainder: string } {
+  const lines = body
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const credits: ReleaseCard["credits"] = [];
+  const remainder: string[] = [];
+
+  for (const line of lines) {
+    let matched = false;
+
+    for (const field of RELEASE_CREDIT_FIELDS) {
+      const labelPattern = field.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const match = line.match(new RegExp(`^${labelPattern}\\s*(.*)$`, "i"));
+      if (match) {
+        const value = match[1].trim();
+        if (value) credits.push({ label: field.label, value });
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      const generic = line.match(/^([^:]+):\s*(.+)$/);
+      if (generic) {
+        const rawLabel = generic[1].trim().toLowerCase();
+        const field = RELEASE_CREDIT_FIELDS.find((entry) => {
+          const normalized = entry.label.replace(/:$/, "").trim().toLowerCase();
+          return normalized === rawLabel;
+        });
+        if (field) {
+          credits.push({ label: field.label, value: generic[2].trim() });
+          matched = true;
+        }
+      }
+    }
+
+    if (!matched) remainder.push(line);
+  }
+
+  return { credits, remainder: remainder.join("\n\n") };
+}
+
+function pickReleasePrimaryImage(
+  src: Record<string, unknown>,
+  extras: ReleaseCard["extras"],
+  baseUrl: string,
+): { src: string; alt: string } | null {
+  for (const extra of extras) {
+    if (extra.image?.src) return extra.image;
+  }
+
+  return pickPostThumbnail(src, baseUrl);
+}
+
+function withoutPrimaryImageExtra(
+  extras: ReleaseCard["extras"],
+  primary: { src: string; alt: string } | null,
+): ReleaseCard["extras"] {
+  if (!primary) return extras;
+
+  return extras.filter((extra) => {
+    if (!extra.image?.src || extra.image.src !== primary.src) return true;
+    return !!extra.text?.trim();
+  });
+}
+
+function parseReleaseExtras(src: Record<string, unknown>, baseUrl: string): ReleaseCard["extras"] {
+  if (!Array.isArray(src.releaseExtras)) return [];
+
+  const extras: ReleaseCard["extras"] = [];
+  for (const entry of src.releaseExtras) {
+    if (!entry || typeof entry !== "object") continue;
+    const parsed = parseStrapiEntity(entry);
+    const text = typeof parsed.text === "string" ? parsed.text.trim() : "";
+    const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt);
+    if (!text && !image) continue;
+    extras.push({ text, image: image ? { src: image.src, alt: image.alt } : null });
+  }
+
+  return extras;
+}
+
+function parseReleaseLinks(src: Record<string, unknown>): ReleaseCard["links"] {
+  if (!Array.isArray(src.releaseLinks)) return [];
+
+  const links: ReleaseCard["links"] = [];
+  for (const entry of src.releaseLinks) {
+    if (!entry || typeof entry !== "object") continue;
+    const parsed = parseStrapiEntity(entry);
+    const label = typeof parsed.label === "string" ? parsed.label.trim() : "";
+    const url = typeof parsed.url === "string" ? parsed.url.trim() : "";
+    if (label && url) links.push({ label, url });
+  }
+
+  return links;
+}
+
 function parseReleaseCredits(src: Record<string, unknown>): ReleaseCard["credits"] {
   const details = parseStrapiEntity(src.releaseDetails);
   if (details && typeof details === "object") {
@@ -832,10 +931,22 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
     const title = typeof src.title === "string" ? src.title.trim() : "";
     if (!title) continue;
 
-    const image = pickPostThumbnail(src, baseUrl);
-    const body = typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : "";
     const summary = typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined;
-    const credits = parseReleaseCredits(src);
+    let body = typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : "";
+    let credits = parseReleaseCredits(src);
+    const extras = parseReleaseExtras(src, baseUrl);
+    const links = parseReleaseLinks(src);
+
+    if (credits.length === 0 && body) {
+      const parsedBody = parseCreditsFromBody(body);
+      if (parsedBody.credits.length > 0) {
+        credits = parsedBody.credits;
+        body = parsedBody.remainder;
+      }
+    }
+
+    const primaryImage = pickReleasePrimaryImage(src, extras, baseUrl);
+    const displayExtras = withoutPrimaryImageExtra(extras, primaryImage);
 
     cards.push({
       id: resolvePostId(item, src, title),
@@ -843,9 +954,11 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
       title,
       summary,
       publishedAt: resolvePostDate(src),
-      image: image ?? { src: "", alt: title },
+      image: primaryImage ?? { src: "", alt: title },
       credits,
       body,
+      extras: displayExtras,
+      links,
     });
   }
 
@@ -868,7 +981,7 @@ function getNewsImage(post: NewsPost): SiteContent["homeFeedPosts"][number]["ima
       block.__component === "news.media" && !!block.image,
   );
   if (!media || !media.image) return null;
-  return { src: getLocalThumbSrc(media.image.url), alt: media.image.alt };
+  return { src: media.image.url, alt: media.image.alt };
 }
 
 function getEventExcerpt(post: EventPost): string {
@@ -896,16 +1009,11 @@ function getEventImage(post: EventPost): SiteContent["homeFeedPosts"][number]["i
       block.__component === "events.media" && !!block.image,
   );
   if (!media || !media.image) return null;
-  return { src: getLocalThumbSrc(media.image.url), alt: media.image.alt };
+  return { src: media.image.url, alt: media.image.alt };
 }
 
 function getFeedImage(image: SiteContent["homeFeedPosts"][number]["image"]): SiteContent["homeFeedPosts"][number]["image"] {
-  if (!image) return null;
-
-  return {
-    ...image,
-    src: getLocalThumbSrc(image.src),
-  };
+  return image;
 }
 
 function getReleaseExcerpt(card: ReleaseCard): string {
@@ -1058,7 +1166,7 @@ function normalizeStrapiPayload(json: any): Record<string, unknown> {
 }
 
 async function fetchStrapiSiteContent(): Promise<SiteContent> {
-  const baseUrl = STRAPI_URL!.replace(/\/+$/, "");
+  const baseUrl = STRAPI_URL.replace(/\/+$/, "");
   const siteContentEndpoint = `${baseUrl}/api/site-content?populate=aboutBackground`;
   const postsQuery = [
     "sort[0]=publishedOn:desc",
@@ -1071,6 +1179,11 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
     "populate[newsBlocks][populate]=*",
     "populate[eventBlocks][populate]=*",
     "populate[releaseDetails]=*",
+    "populate[releaseExtras][populate][image][fields][0]=url",
+    "populate[releaseExtras][populate][image][fields][1]=alternativeText",
+    "populate[releaseExtras][populate][image][fields][2]=width",
+    "populate[releaseExtras][populate][image][fields][3]=height",
+    "populate[releaseLinks]=*",
   ].join("&");
   const postsEndpoint = `${baseUrl}/api/posts?${postsQuery}`;
 
@@ -1123,23 +1236,16 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
   });
 }
 
-export async function getSiteContent(): Promise<SiteContent> {
-  if (CMS_MODE !== "strapi") return withDerivedContent(localSiteContent);
-  if (!STRAPI_URL) {
-    if (isDeployBuild()) {
-      throw new Error("[15love] STRAPI_URL is missing during deploy build");
-    }
-    return withDerivedContent(localSiteContent);
-  }
-
+function requireStrapiCredentials(): void {
   if (!STRAPI_TOKEN) {
-    if (isDeployBuild()) {
-      throw new Error(
-        "[15love] STRAPI_TOKEN is missing during deploy build. Add it in Vercel → Settings → Environment Variables.",
-      );
-    }
-    console.warn("[15love] STRAPI_TOKEN is not set — Strapi may return 403");
+    throw new Error(
+      "[15love] STRAPI_TOKEN is required (site/.env locally, Vercel → Environment Variables in production).",
+    );
   }
+}
+
+export async function getSiteContent(): Promise<SiteContent> {
+  requireStrapiCredentials();
 
   const effectiveCacheTtlMs = getEffectiveStrapiCacheTtlMs();
   const now = Date.now();
@@ -1164,11 +1270,7 @@ export async function getSiteContent(): Promise<SiteContent> {
     return content;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (isDeployBuild()) {
-      throw new Error(`[15love] Strapi fetch failed during deploy build: ${message}`);
-    }
-    console.warn("[15love] Failed to fetch from Strapi, using local fallback:", message);
-    return withDerivedContent(localSiteContent);
+    throw new Error(`[15love] Strapi fetch failed (${STRAPI_URL}): ${message}`);
   } finally {
     inFlightStrapiContentRequest = null;
   }
