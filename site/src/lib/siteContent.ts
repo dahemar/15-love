@@ -1,7 +1,11 @@
 import { localSiteContent, type SiteContent } from "../data/siteContent";
 import { isDeployBuild, resolveCmsMode, resolveStrapiToken, resolveStrapiUrl } from "./cmsConfig";
 import { getLocalThumbSrc } from "./localAssetThumbs";
+import { normalizeNewsImageWidth } from "./newsImageWidth";
 import { buildPostHref } from "./postRoutes";
+
+export { normalizeNewsImageWidth } from "./newsImageWidth";
+export type { NewsImageWidth } from "./newsImageWidth";
 
 const CMS_MODE = resolveCmsMode();
 const STRAPI_URL = resolveStrapiUrl();
@@ -132,11 +136,6 @@ function parseImageSource(
 function normalizeNewsImagePosition(value: unknown): "left" | "right" | "center" | "full" {
   if (value === "right" || value === "center" || value === "full") return value;
   return "left";
-}
-
-function normalizeNewsImageWidth(value: unknown): "narrow" | "medium" | "wide" {
-  if (value === "narrow" || value === "wide") return value;
-  return "medium";
 }
 
 function normalizeNewsImageParagraph(value: unknown): number | undefined {
