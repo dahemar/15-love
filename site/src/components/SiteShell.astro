@@ -1,0 +1,262 @@
+---
+type Tab = "home" | "news" | "releases" | "events" | "about" | "archive";
+
+type Props = {
+  activeTab: Tab;
+};
+
+const { activeTab } = Astro.props;
+
+const tabs: Array<{ key: Tab; href: string; label: string }> = [
+  { key: "home", href: "/home", label: "home" },
+  { key: "news", href: "/news", label: "news" },
+  { key: "releases", href: "/releases", label: "releases" },
+  { key: "events", href: "/events", label: "events" },
+  { key: "about", href: "/about", label: "about" },
+  { key: "archive", href: "/archive", label: "archive" },
+];
+
+---
+
+<div class="viewport" data-viewport>
+  <div class="stage" data-stage>
+    <div class="surface" data-surface>
+      <header class="header">
+        <div class="brand" aria-label="15 love">
+          <img class="brandLogo" src="/assets/15love_logo_1.svg" alt="15 love logo" width="180" height="72" />
+        </div>
+
+        <nav class="topnav" aria-label="Primary">
+          <a class={"tab" + (activeTab === "home" ? " is-active" : "")} href="/home/" data-astro-prefetch="load">home</a><a class={"tab" + (activeTab === "news" ? " is-active" : "")} href="/news/" data-astro-prefetch="load">/news</a><a class={"tab" + (activeTab === "releases" ? " is-active" : "")} href="/releases/" data-astro-prefetch="load">/releases</a><a class={"tab" + (activeTab === "events" ? " is-active" : "")} href="/events/" data-astro-prefetch="load">/events</a><a class={"tab" + (activeTab === "about" ? " is-active" : "")} href="/about/" data-astro-prefetch="load">/about</a><a class={"tab" + (activeTab === "archive" ? " is-active" : "")} href="/archive/" data-astro-prefetch="load">/archive</a>
+        </nav>
+      </header>
+
+      <div class={"frame" + (activeTab === "news" || activeTab === "releases" || activeTab === "events" ? " is-news-layout" : "") + (activeTab === "archive" ? " is-archive-layout" : "")}>
+        <aside class="col col-left">
+          <slot name="left" />
+        </aside>
+
+        <section class="col col-center" aria-label="Entries">
+          <div class="center-scroll">
+            <slot name="center" />
+          </div>
+        </section>
+
+        <aside class="col col-right">
+          <slot name="right" />
+        </aside>
+      </div>
+
+      <footer class="footer">
+        <div class="footer-left">
+          <a href="mailto:info@15love.dk">info@15love.dk</a>
+          <a href="https://instagram.com/" target="_blank" rel="noreferrer">instagram</a>
+          <a href="#">newsletter</a>
+        </div>
+        <div class="footer-right">always out playing © 15 love</div>
+      </footer>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (() => {
+    var v = document.querySelector('[data-viewport]');
+    var g = document.querySelector('[data-stage]');
+    var s = document.querySelector('[data-surface]');
+    if (!v || !g || !s) return;
+    s.style.transformOrigin = 'top left';
+    var W = 1920, H = 1080, r = 0, l = -1;
+    var m = function() {
+      r = 0;
+      var k = Math.min(v.clientWidth / W, v.clientHeight / H);
+      if (k === l) return;
+      l = k;
+      g.style.width = (W * k) + 'px';
+      g.style.height = (H * k) + 'px';
+      s.style.transform = 'scale(' + k + ')';
+    };
+    new ResizeObserver(function() { if (!r) r = requestAnimationFrame(m); }).observe(v);
+    m();
+  })();
+</script>
+
+<style>
+  .viewport {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--page-bg);
+  }
+
+  .stage {
+    position: relative;
+  }
+
+  .surface {
+    position: relative;
+    background: var(--page-bg);
+    overflow: hidden;
+    width: 1920px;
+    height: 1080px;
+    will-change: transform;
+  }
+
+  .header {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 140px;
+  }
+
+  .brand {
+    position: absolute;
+    left: 50%;
+    top: 18px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .brandLogo {
+    display: block;
+    width: 180px;
+    height: auto;
+    max-width: 100%;
+  }
+
+  .topnav {
+    position: absolute;
+    left: 50%;
+    top: 110px;
+    transform: translateX(-50%);
+    font-size: 26.4px; /* +10% */
+    line-height: 1;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .tab {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .tab.is-active {
+    color: #0000ff;
+  }
+
+  .path {
+    display: none;
+  }
+
+  .frame {
+    position: absolute;
+    left: 0;
+    top: 140px;
+    width: 100%;
+    height: calc(1080px - 140px - 44px);
+    display: grid;
+    /* Use flexible columns so they fill the full width and remain symmetric
+       around the center. Side columns equal, center wider (2.5x). */
+     grid-template-columns: 1fr 2.5fr 1fr;
+    gap: 0;
+    padding: 16px 4px 0; /* minimal horizontal padding to hug edges */
+  }
+
+    /* Wide content pages keep the same left column dimensions as home while the
+      center column spans into the right column to create one horizontal panel. */
+  .frame.is-news-layout .col-center {
+    grid-column: 2 / 4;
+    padding-left: 8px;
+    padding-right: 0;
+  }
+
+  .frame.is-news-layout .col-right {
+    display: none;
+  }
+
+  .frame.is-news-layout .center-scroll {
+    border: none;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+
+  .frame.is-archive-layout {
+    grid-template-columns: 1fr;
+    padding: 16px 4px 0;
+  }
+
+  .frame.is-archive-layout .col-left,
+  .frame.is-archive-layout .col-right {
+    display: none;
+  }
+
+  .frame.is-archive-layout .col-center {
+    grid-column: 1;
+    padding: 0;
+  }
+
+  .frame.is-archive-layout .center-scroll {
+    border: none;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .col {
+    min-height: 0;
+  }
+
+  .col-left {
+    padding-right: 8px;
+  }
+  .col-center {
+    padding: 0 8px;
+  }
+  .col-right {
+    padding-left: 8px;
+  }
+
+  .center-scroll {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 24px;
+  }
+
+  .footer {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 44px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 17px;
+    line-height: 1;
+    font-weight: 400;
+  }
+
+  .footer-left {
+    display: flex;
+    gap: 32px;
+  }
+
+  .footer a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .footer a:hover {
+    text-decoration: underline;
+  }
+
+</style>

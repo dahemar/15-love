@@ -1,0 +1,104 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SiteShell from "../components/SiteShell.astro";
+import TennisButton from "../components/TennisButton.astro";
+import PostFeed from "../components/PostFeed.astro";
+import { getSiteContent } from "../lib/siteContent";
+import { getEventPostViews, getNewsPostViews, getReleasePostViews } from "../lib/postViews";
+
+const content = await getSiteContent();
+const homeFeedPosts = content.homeFeedPosts ?? [];
+const news = getNewsPostViews(content).slice(0, 9);
+const events = getEventPostViews(content).slice(0, 9);
+const releases = getReleasePostViews(content).slice(0, 9);
+
+const homeTags = Array.from(new Set(content.archiveEntries.flatMap((entry) => entry.tags))).sort((left, right) => left.localeCompare(right));
+const homeDates = Array.from(new Set(content.archiveEntries.map((entry) => entry.dateLabel).filter(Boolean))).slice(0, 4);
+---
+
+<BaseLayout title="15 love — Home">
+  <SiteShell activeTab="home">
+    <div slot="left" class="colblock colblock-left">
+      <section class="block block-news">
+        <div class="blockhead">
+          <h2 class="coltitle">news</h2>
+        </div>
+        <ul class="list">
+          {news.map((item) => (
+            <li class="li"><span class="heart">♡</span><a class="text postListLink" href={item.href} data-astro-prefetch="hover">{item.title}</a></li>
+          ))}
+        </ul>
+        <TennisButton class="block-tennis" href="/news" label="Go to news" prefetch="load" />
+      </section>
+
+      <section class="block block-events">
+        <div class="blockhead">
+          <h2 class="coltitle">events</h2>
+        </div>
+        <ul class="list">
+          {events.map((item) => (
+            <li class="li"><span class="heart">♡</span><a class="text postListLink" href={item.href} data-astro-prefetch="hover">{item.title}</a></li>
+          ))}
+        </ul>
+        <TennisButton class="block-tennis" href="/events" label="Go to events" prefetch="load" />
+      </section>
+    </div>
+
+    <div slot="center" class="center">
+      <PostFeed posts={homeFeedPosts} />
+    </div>
+
+    <div slot="right" class="colblock colblock-right">
+      <section class="block block-releases">
+        <div class="blockhead">
+          <h2 class="coltitle">releases</h2>
+        </div>
+        <ul class="list">
+          {releases.map((item) => (
+            <li class="li"><span class="heart">♡</span><a class="text postListLink" href={item.href} data-astro-prefetch="hover">{item.title}</a></li>
+          ))}
+        </ul>
+        <TennisButton class="block-tennis" href="/releases" label="Go to releases" prefetch="load" />
+      </section>
+
+      <section class="block block-tags">
+        <div class="blockhead">
+          <h2 class="coltitle">tags &amp; dates</h2>
+        </div>
+        <div class="tagsText tagsLinks">
+          {homeTags.map((tag, index) => (
+            <>
+              <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
+              {index < homeTags.length - 1 ? <span>, </span> : null}
+            </>
+          ))}
+        </div>
+        <div class="dates">
+          {homeDates.map((dateLabel) => (
+            <div><a class="dateLink" href={`/archive?date=${encodeURIComponent(dateLabel)}`} data-astro-prefetch="hover">{dateLabel}</a></div>
+          ))}
+        </div>
+        <TennisButton class="block-tennis" href="/archive" label="Go to archive" prefetch="load" />
+      </section>
+    </div>
+  </SiteShell>
+</BaseLayout>
+
+<style>
+  .tagsLinks {
+    display: block;
+  }
+
+  .tagLink,
+  .dateLink,
+  .postListLink {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .tagLink:hover,
+  .dateLink:hover,
+  .postListLink:hover {
+    text-decoration: underline;
+  }
+</style>

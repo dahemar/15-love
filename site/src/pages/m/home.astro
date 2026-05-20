@@ -1,0 +1,11 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import MockupPage from "../../components/MockupPage.astro";
+import { mockups } from "../../data/mockups";
+
+const m = mockups["m-home"];
+---
+
+<BaseLayout title={m.title}>
+  <MockupPage image={m.image} width={m.size.width} height={m.size.height} hotspots={m.hotspots} />
+</BaseLayout>

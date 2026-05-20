@@ -1,0 +1,176 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SiteShell from "../components/SiteShell.astro";
+import { getSiteContent } from "../lib/siteContent";
+import { getLocalThumbSrc } from "../lib/localAssetThumbs";
+import "../styles/archive.css";
+
+const content = await getSiteContent();
+const entries = content.archiveEntries;
+const tagOptions = Array.from(new Set(entries.flatMap((entry) => entry.tags))).sort((left, right) => left.localeCompare(right));
+const dateOptions = Array.from(new Set(entries.map((entry) => entry.dateLabel).filter(Boolean)));
+const searchParams = Astro.url.searchParams;
+
+const requestedType = searchParams.get("type")?.trim().toLowerCase() ?? "all";
+const requestedTag = searchParams.get("tag")?.trim().toLowerCase() ?? "all";
+const requestedDate = searchParams.get("date")?.trim() ?? "all";
+
+const initialType = requestedType === "news" || requestedType === "events" || requestedType === "releases" ? requestedType : "all";
+const initialTag = requestedTag !== "all" && tagOptions.includes(requestedTag) ? requestedTag : "all";
+const initialDate = requestedDate !== "all" && dateOptions.includes(requestedDate) ? requestedDate : "all";
+
+const filteredEntries = entries.filter((entry) => {
+  if (initialType !== "all" && entry.category !== initialType) return false;
+  if (initialTag !== "all" && !entry.tags.includes(initialTag)) return false;
+  if (initialDate !== "all" && entry.dateLabel !== initialDate) return false;
+  return true;
+});
+
+const renderedEntries = filteredEntries.map((entry) => ({
+  ...entry,
+  thumbnail: entry.thumbnail
+    ? {
+        ...entry.thumbnail,
+        src: getLocalThumbSrc(entry.thumbnail.src),
+      }
+    : null,
+}));
+---
+
+<BaseLayout title="15 love - Archive">
+  <SiteShell activeTab="archive">
+    <div slot="center" class="archive-wrap">
+      <header class="archive-header">
+        <div class="archive-filters" aria-label="Archive filters">
+          <label class="archive-filter">
+            <span class="sr-only">Filter by post type</span>
+            <select class="archive-select" aria-label="post type">
+              <option value="all" selected={initialType === "all"}>post type</option>
+              <option value="news" selected={initialType === "news"}>news</option>
+              <option value="events" selected={initialType === "events"}>events</option>
+              <option value="releases" selected={initialType === "releases"}>releases</option>
+            </select>
+          </label>
+
+          <label class="archive-filter">
+            <span class="sr-only">Filter by tag</span>
+            <select class="archive-select" aria-label="tag">
+              <option value="all" selected={initialTag === "all"}>tag</option>
+              {tagOptions.map((tag) => (
+                <option value={tag} selected={tag === initialTag}>{tag}</option>
+              ))}
+            </select>
+          </label>
+
+          <label class="archive-filter">
+            <span class="sr-only">Filter by date</span>
+            <select class="archive-select" data-filter-kind="date">
+              <option value="all" selected={initialDate === "all"}>date</option>
+              {dateOptions.map((dateLabel) => (
+                <option value={dateLabel} selected={dateLabel === initialDate}>{dateLabel}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </header>
+
+      <div class="archive-grid-wrap">
+        <ul class="archive-grid" id="archive-grid">
+          {renderedEntries.map((entry, index) => (
+            <li
+              class="archive-cell"
+              data-type={entry.category}
+              data-tags={entry.tags.join("|")}
+              data-date={entry.dateLabel}
+            >
+              <a href={entry.href} class="archive-cell-link" title={entry.title} data-astro-prefetch="hover">
+                {entry.thumbnail ? (
+                  <img
+                    class="archive-img"
+                    src={entry.thumbnail.src}
+                    alt={entry.thumbnail.alt}
+                    width="520"
+                    height="520"
+                    loading={index < 10 ? "eager" : "lazy"}
+                    decoding="async"
+                    fetchpriority={index < 10 ? "high" : "auto"}
+                  />
+                ) : (
+                  <div class="archive-img archive-img-empty" aria-hidden="true"></div>
+                )}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+
+  </SiteShell>
+
+  <script is:inline>
+    (function(){
+      var selects = document.querySelectorAll('.archive-select');
+      var cells = document.querySelectorAll('.archive-cell');
+      if (!selects.length || !cells.length) return;
+
+      function hasOption(select, value) {
+        for (var i = 0; i < select.options.length; i++) {
+          if (select.options[i].value === value) return true;
+        }
+        return false;
+      }
+
+      function syncUrl(type, tag, date) {
+        var params = new URLSearchParams(window.location.search);
+        if (type !== 'all') params.set('type', type); else params.delete('type');
+        if (tag !== 'all') params.set('tag', tag); else params.delete('tag');
+        if (date !== 'all') params.set('date', date); else params.delete('date');
+        var next = params.toString() ? window.location.pathname + '?' + params.toString() : window.location.pathname;
+        window.history.replaceState({}, '', next);
+      }
+
+      function hydrateFromUrl() {
+        var params = new URLSearchParams(window.location.search);
+        for (var i = 0; i < selects.length; i++) {
+          var s = selects[i];
+          var label = s.getAttribute('aria-label') || '';
+          var kind = s.getAttribute('data-filter-kind') || '';
+          var paramName = label === 'post type' ? 'type' : label === 'tag' ? 'tag' : kind === 'date' ? 'date' : '';
+          if (!paramName) continue;
+          var value = params.get(paramName);
+          if (value && hasOption(s, value)) s.value = value;
+        }
+      }
+
+      function applyFilters(updateUrl) {
+        var type = 'all', tag = 'all', date = 'all';
+        for (var i = 0; i < selects.length; i++) {
+          var s = selects[i];
+          var label = s.getAttribute('aria-label') || '';
+          if (label === 'post type') type = s.value;
+          else if (label === 'tag') tag = s.value;
+          else if (s.getAttribute('data-filter-kind') === 'date') date = s.value;
+        }
+        for (var j = 0; j < cells.length; j++) {
+          var c = cells[j];
+          var show = true;
+          if (type !== 'all' && c.getAttribute('data-type') !== type) show = false;
+          if (tag !== 'all') {
+            var cellTags = (c.getAttribute('data-tags') || '').split('|');
+            if (cellTags.indexOf(tag) === -1) show = false;
+          }
+          if (date !== 'all' && c.getAttribute('data-date') !== date) show = false;
+          c.style.display = show ? '' : 'none';
+        }
+        if (updateUrl) syncUrl(type, tag, date);
+      }
+
+      hydrateFromUrl();
+      applyFilters(false);
+
+      for (var k = 0; k < selects.length; k++) {
+        selects[k].addEventListener('change', function() { applyFilters(true); });
+      }
+    })();
+  </script>
+</BaseLayout>

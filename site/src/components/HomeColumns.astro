@@ -1,0 +1,183 @@
+---
+import TennisButton from "./TennisButton.astro";
+import PostFeed from "./PostFeed.astro";
+import { getSiteContent } from "../lib/siteContent";
+
+const content = await getSiteContent();
+const news = content.newsList.slice(0, 9);
+const events = content.eventsList.slice(0, 9);
+const releases = content.releaseList.slice(0, 9);
+
+const tags = [
+  "slim0",
+  "jordan playfair",
+  "ml buch",
+  "ctm",
+  "forgiveness",
+  "suntub",
+  "process",
+  "vinyl",
+  "vind",
+  "cph distillery",
+];
+
+const dates = ["july ‘24", "june ‘24", "may ‘24", "april ‘24"]; 
+---
+
+<div slot="left" class="colblock colblock-left">
+  <section class="block block-news">
+    <div class="blockhead">
+      <h2 class="coltitle">news</h2>
+      <TennisButton href="/news" label="Go to news" />
+    </div>
+    <ul class="list">
+      {news.map((item) => (
+        <li class="li">
+          <span class="heart" aria-hidden="true">♡</span>
+          <span class="text">{item}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="block block-events">
+    <div class="blockhead">
+      <h2 class="coltitle">events</h2>
+      <TennisButton href="/events" label="Go to events" />
+    </div>
+    <ul class="list">
+      {events.map((item) => (
+        <li class="li">
+          <span class="heart" aria-hidden="true">♡</span>
+          <span class="text">{item}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+</div>
+
+<div slot="center" class="center">
+  <PostFeed />
+</div>
+
+<div slot="right" class="colblock colblock-right">
+  <section class="block block-releases">
+    <div class="blockhead">
+      <h2 class="coltitle">releases</h2>
+      <TennisButton href="/releases" label="Go to releases" />
+    </div>
+    <ul class="list">
+      {releases.map((item) => (
+        <li class="li">
+          <span class="heart" aria-hidden="true">♡</span>
+          <span class="text">{item}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="block block-tags">
+    <div class="blockhead">
+      <h2 class="coltitle">tags &amp; dates</h2>
+      <TennisButton href="/archive" label="Go to archive" />
+    </div>
+    <div class="tagsText">{tags.join(", ")}, ...</div>
+    <div class="dates">
+      {dates.map((d) => (
+        <div>{d}</div>
+      ))}
+    </div>
+  </section>
+</div>
+
+<style>
+  .block {
+    position: absolute;
+    left: 0;
+    right: 0;
+  }
+
+  /* PDF page 9: news/release titles sit at y≈199.9; events/tags at y≈640.2.
+     Frame top is 180 + 20 padding = 200, so events/tags start at ~440.2. */
+  .colblock-left,
+  .colblock-right {
+    position: relative;
+    height: 100%;
+  }
+
+  .block-news,
+  .block-releases {
+    top: 0;
+  }
+
+  .block-events,
+  .block-tags {
+    top: 440.25px;
+  }
+
+  .blockhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .coltitle {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.1;
+    font-weight: 400;
+    text-transform: lowercase;
+  }
+
+  .list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .li {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    align-items: start;
+    column-gap: 8px;
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .heart {
+    font-size: 20px;
+    line-height: 1;
+    transform: translateY(2px);
+  }
+
+  .venue {
+    font-size: 18px;
+  }
+
+  .year {
+    white-space: nowrap;
+  }
+
+  .center {
+    padding-top: 2px;
+  }
+
+  .tagsText {
+    margin-top: 14px;
+    font-size: 18px;
+    line-height: 1.25;
+  }
+
+  .dates {
+    margin-top: 28px;
+    text-align: right;
+    font-size: 18px;
+    line-height: 1.25;
+    display: grid;
+    gap: 10px;
+  }
+</style>

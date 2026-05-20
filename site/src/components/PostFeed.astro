@@ -1,0 +1,152 @@
+---
+import TennisButton from "./TennisButton.astro";
+import type { SiteContent } from "../data/siteContent";
+
+type HomeFeedPost = SiteContent["homeFeedPosts"][number];
+
+type Props = {
+  posts: HomeFeedPost[];
+};
+
+const { posts } = Astro.props;
+---
+
+<div class="feed" aria-label="Recent posts across all sections">
+  {posts.map((post, index) => (
+    <article class="card" id={`home-feed-${post.id}`}>
+      <div class="card-meta">
+        <span class={`pill is-${post.category}`}>{post.category}</span>
+        <span class="date">{post.dateLabel}</span>
+      </div>
+
+      <div class={`content${post.image ? " has-image" : ""}`}>
+        {post.image ? (
+          <img
+            class="media"
+            src={post.image.src}
+            alt={post.image.alt}
+            width="180"
+            height="180"
+            loading={index === 0 ? "eager" : "lazy"}
+            decoding="async"
+            fetchpriority={index === 0 ? "high" : undefined}
+          />
+        ) : null}
+
+        <div class="copy">
+          <h3 class="title"><a class="content-link" href={post.href} data-astro-prefetch="hover">{post.title}</a></h3>
+          <p class="body">{post.excerpt}</p>
+        </div>
+      </div>
+
+      <TennisButton class="card-tennis" href={post.href} label={`Open ${post.title}`} />
+    </article>
+  ))}
+</div>
+
+<style>
+  .feed {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    background: #fff;
+    min-height: 100%;
+  }
+
+  .card {
+    position: relative;
+    border-top: 1px solid #000;
+    padding: 12px 52px 14px 12px;
+    background: #fff;
+    content-visibility: auto;
+    contain-intrinsic-size: 240px;
+  }
+
+  .card:first-child {
+    border-top: none;
+  }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1;
+    text-transform: lowercase;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 0 9px;
+    border: 1px solid #000;
+    background: #fff;
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .date {
+    letter-spacing: 0.02em;
+  }
+
+  .content {
+    min-width: 0;
+  }
+
+  .content.has-image {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .media {
+    width: 180px;
+    height: 180px;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+  }
+
+  .copy {
+    min-width: 0;
+  }
+
+  .media-link,
+  .content-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .content-link:hover {
+    text-decoration: underline;
+  }
+
+  .title {
+    margin: 0 0 8px;
+    font-size: 18px;
+    line-height: 1.15;
+    font-weight: 400;
+  }
+
+  .body {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .content.has-image .copy {
+    width: 100%;
+  }
+
+  .card-tennis,
+  .card .tennis {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+  }
+</style>

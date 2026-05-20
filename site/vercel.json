@@ -1,0 +1,6 @@
+{
+  "env": {
+    "CMS_MODE": "strapi",
+    "STRAPI_URL": "https://strapi-client-15-love.onrender.com"
+  }
+}

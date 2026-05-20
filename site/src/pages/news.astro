@@ -1,0 +1,396 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SiteShell from "../components/SiteShell.astro";
+import { getSiteContent } from "../lib/siteContent";
+import { getLocalThumbSrc } from "../lib/localAssetThumbs";
+import { getNewsPostViews } from "../lib/postViews";
+
+const content = await getSiteContent();
+const newsPosts = getNewsPostViews(content);
+const news = newsPosts.map((post) => ({ title: post.title, href: post.href }));
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function isHtmlLike(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function plainTextToHtml(value: string): string {
+  return value
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll("\n", "<br />")}</p>`)
+    .join("");
+}
+
+function renderNewsBody(value?: string): string {
+  if (!value) return "";
+  return isHtmlLike(value) ? value : plainTextToHtml(value);
+}
+
+function mediaDimensions(size: "narrow" | "medium" | "wide") {
+  if (size === "narrow") return { width: 190, height: 190 };
+  if (size === "wide") return { width: 460, height: 320 };
+  return { width: 320, height: 260 };
+}
+
+---
+
+<BaseLayout title="15 love — News">
+  <SiteShell activeTab="news">
+    <div slot="left" class="colblock colblock-left news-left">
+      <section class="block block-news">
+        <div class="blockhead">
+          <h2 class="coltitle">news</h2>
+        </div>
+        <ul class="list">
+          {news.map((item) => (
+            <li class="li">
+              <span class="heart">♡</span>
+              <a class="text news-list-link" href={item.href} data-astro-prefetch="hover">{item.title}</a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+
+    <div slot="center" class="news-wide">
+      <section class="news-stream-box" aria-label="News feed">
+        <div class="news-stream-scroll">
+          <div class="news-stream-frame">
+            <div class="news-stream">
+            {newsPosts.map((post, postIndex) => (
+              <article class="news-entry" id={post.id}>
+                <div class="news-entry-start">
+                  <header class="news-entry-header">
+                    <h3 class="news-entry-title">
+                      <a class="news-entry-link" href={post.href} data-astro-prefetch="hover">{post.title}</a>
+                    </h3>
+                  </header>
+                </div>
+
+                <div class="news-entry-body">
+                {post.newsBlocks.map((block, blockIndex) => {
+                  if (block.__component === "news.rich-text") {
+                    return <div class="news-block news-richtext" set:html={renderNewsBody(block.body)} />;
+                  }
+
+                  if (!block.image) return null;
+                  const size = block.imageWidth ?? "medium";
+                  const fallback = mediaDimensions(size);
+                  const width = block.image.width ?? fallback.width;
+                  const height = block.image.height ?? fallback.height;
+
+                  return (
+                    <figure class={`news-block news-media is-${block.imagePosition} is-${size}`}>
+                      <img
+                        class="news-image"
+                        src={getLocalThumbSrc(block.image.url)}
+                        alt={block.image.alt}
+                        width={width}
+                        height={height}
+                        loading={postIndex === 0 && blockIndex === 0 ? "eager" : "lazy"}
+                        decoding="async"
+                        fetchpriority={postIndex === 0 && blockIndex === 0 ? "high" : undefined}
+                      />
+                      {block.caption ? <figcaption class="news-caption">{block.caption}</figcaption> : null}
+                    </figure>
+                  );
+                })}
+                </div>
+              </article>
+            ))}
+            </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </SiteShell>
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const stream = document.querySelector(".news-stream");
+    const frame = document.querySelector(".news-stream-frame");
+    const scroll = document.querySelector(".news-stream-scroll");
+    if (!stream || !frame || !scroll) return;
+
+    const getColWidth = () =>
+      parseFloat(getComputedStyle(stream).getPropertyValue("--news-column-width")) || 712;
+    const panelWidth = (n, cw) => n * cw + Math.max(0, n - 1);
+
+    const layout = () => {
+      const colWidth = getColWidth();
+      const maxHeight = scroll.clientHeight;
+      if (!maxHeight || !colWidth) return;
+
+      stream.style.height = `${maxHeight}px`;
+      stream.style.minHeight = `${maxHeight}px`;
+
+      requestAnimationFrame(() => {
+        const streamWidth = stream.scrollWidth || stream.offsetWidth;
+        const columnCount = Math.max(1, Math.round((streamWidth + 1) / (colWidth + 1)));
+        const width = panelWidth(columnCount, colWidth);
+        frame.style.width = `${width}px`;
+        stream.style.width = `${width}px`;
+        frame.style.height = `${maxHeight}px`;
+        markColumnFlow(colWidth);
+      });
+
+      stream.querySelectorAll("img").forEach((img) => {
+        if (!img.complete) img.addEventListener("load", schedule, { once: true });
+      });
+    };
+
+    const markColumnFlow = (colWidth) => {
+      const getColumnIndex = (element, streamRect) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return Math.round((rect.left - streamRect.left) / (colWidth + 1));
+      };
+
+      const entries = stream.querySelectorAll(".news-entry");
+      const streamRect = stream.getBoundingClientRect();
+
+      entries.forEach((entry) => {
+        const start = entry.querySelector(".news-entry-start");
+        const body = entry.querySelector(".news-entry-body");
+        if (!body) return;
+
+        body.classList.remove("is-column-continue");
+
+        if (!start) return;
+
+        const startCol = getColumnIndex(start, streamRect);
+        const bodyCol = getColumnIndex(body, streamRect);
+        if (startCol == null || bodyCol == null) return;
+
+        // If the title lands in a previous column, add breathing room
+        // at the top of the continuation body in the next column.
+        if (bodyCol > startCol) {
+          body.classList.add("is-column-continue");
+        }
+      });
+    };
+
+    const schedule = () => requestAnimationFrame(layout);
+    schedule();
+    window.addEventListener("resize", schedule);
+    document.fonts?.ready?.then(schedule);
+    if ("ResizeObserver" in window) new ResizeObserver(schedule).observe(scroll);
+  })();
+</script>
+
+<style>
+  .news-left {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .news-left .block-news {
+    flex: 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .news-wide {
+    --news-column-width: 712px;
+    --news-column-padding-x: 26px;
+    --news-panel-width: calc(2 * var(--news-column-width) + 1px);
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .news-stream-box {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .news-stream-scroll {
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    border: 1px solid #000;
+    box-sizing: border-box;
+    background: #fff;
+  }
+
+  .news-stream-frame {
+    display: inline-block;
+    vertical-align: top;
+    border: none;
+    height: 100%;
+    width: fit-content;
+    max-width: none;
+    background: transparent;
+    box-sizing: border-box;
+  }
+
+  .news-stream {
+    height: 100%;
+    width: auto;
+    box-sizing: border-box;
+    column-width: var(--news-column-width);
+    column-gap: 0;
+    column-rule: 1px solid #000;
+    column-fill: auto;
+    -webkit-column-fill: auto;
+  }
+
+  .news-entry {
+    display: contents;
+  }
+
+  .news-entry-start {
+    display: block;
+    width: 100%;
+    padding: 16px var(--news-column-padding-x) 0;
+    margin: 0;
+    box-sizing: border-box;
+    break-inside: avoid;
+    break-after: avoid;
+  }
+
+  .news-entry-body {
+    display: block;
+    width: 100%;
+    padding: 0 var(--news-column-padding-x);
+    margin: 0;
+    box-sizing: border-box;
+    break-before: auto;
+  }
+
+  .news-entry-body::after {
+    content: "";
+    display: block;
+    clear: both;
+  }
+
+  .news-entry-body.is-column-continue {
+    padding-top: 12px;
+  }
+
+  .news-entry:not(:last-child) .news-entry-body {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #000;
+    -webkit-box-decoration-break: slice;
+    box-decoration-break: slice;
+  }
+
+  .news-entry-link,
+  .news-list-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .news-entry-link:hover,
+  .news-list-link:hover {
+    text-decoration: underline;
+  }
+
+  .news-entry-header {
+    max-width: none;
+    margin: 0 0 10px;
+  }
+
+  .news-entry-title {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.15;
+    font-weight: 600;
+  }
+
+  .news-block {
+    min-width: 0;
+    margin-bottom: 10px;
+  }
+
+  .news-richtext {
+    max-width: none;
+    font-size: 16px;
+    line-height: 1.36;
+  }
+
+  .news-richtext :global(p) {
+    margin: 0 0 0.55em;
+    orphans: 2;
+    widows: 2;
+  }
+
+  .news-richtext :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .news-media {
+    margin: 0;
+    display: grid;
+    gap: 6px;
+    break-inside: avoid;
+  }
+
+  .news-media.is-left {
+    float: left;
+    margin: 0 20px 10px 0;
+  }
+
+  .news-media.is-right {
+    float: right;
+    margin: 0 0 10px 20px;
+  }
+
+  .news-media.is-center {
+    clear: both;
+    margin: 0 auto 10px;
+  }
+
+  .news-media.is-full {
+    clear: both;
+    width: 100%;
+    max-width: 636px;
+  }
+
+  .news-media.is-narrow {
+    width: 220px;
+  }
+
+  .news-media.is-medium {
+    width: 320px;
+  }
+
+  .news-media.is-wide {
+    width: 460px;
+  }
+
+  .news-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #000;
+    object-fit: cover;
+  }
+
+  .news-caption {
+    max-width: 32ch;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  @media (max-width: 1200px) {
+    .news-wide {
+      --news-column-width: 596px;
+      --news-column-padding-x: 24px;
+    }
+  }
+</style>
