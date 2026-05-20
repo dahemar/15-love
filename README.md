@@ -4,12 +4,16 @@ Astro static site. Content comes from **Strapi on Render** at build time (same a
 
 ## Local development
 
+Run commands from the **repo root** (`15 love/`), not from `site/`. Astro reads `./src` and `./public`; only `site/.env` holds Strapi credentials.
+
 ```sh
-cp .env.example .env
-# Paste your STRAPI_TOKEN into .env
+cp .env.example site/.env
+# Paste your STRAPI_TOKEN into site/.env
 npm install
 npm run dev
 ```
+
+If releases layout or news content looks stale locally, restart `npm run dev` after `git pull` (the `site/src/` tree is a mirror of `src/`, not a second app).
 
 Verify Strapi:
 
@@ -23,11 +27,10 @@ The repo does **not** commit `.env`. Vercel must have the same variables as your
 
 | Variable | Value |
 | -------- | ----- |
-| `CMS_MODE` | `strapi` (also set in `vercel.json`) |
 | `STRAPI_URL` | `https://strapi-client-15-love.onrender.com` (also in `vercel.json`) |
 | `STRAPI_TOKEN` | **You must add this in Vercel** → Project → Settings → Environment Variables (Production, Preview, Development) |
 
-Without `STRAPI_TOKEN`, the build fails on purpose instead of publishing stale local/Lorem content.
+Without `STRAPI_TOKEN`, the build fails instead of publishing empty or stale pages.
 
 After adding the token, redeploy from the Vercel dashboard or push to `main`.
 
