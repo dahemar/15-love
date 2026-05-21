@@ -1,0 +1,345 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import SiteShell from "../../components/SiteShell.astro";
+import MobileShell from "../../components/MobileShell.astro";
+import MobileNewsDetail from "../../components/mobile/MobileNewsDetail.astro";
+import { newsImageDimensions } from "../../lib/newsImageWidth";
+import { getSiteContent } from "../../lib/siteContent";
+import { getNewsPostViews } from "../../lib/postViews";
+
+export async function getStaticPaths() {
+  const content = await getSiteContent();
+  return getNewsPostViews(content).flatMap((post) => {
+    const paths = [{ params: { id: post.id } }];
+    if (post.legacyId && post.legacyId !== post.id) {
+      paths.push({ params: { id: post.legacyId } });
+    }
+    return paths;
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function isHtmlLike(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function plainTextToHtml(value: string): string {
+  return value
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll("\n", "<br />")}</p>`)
+    .join("");
+}
+
+function renderNewsBody(value?: string): string {
+  if (!value) return "";
+  return isHtmlLike(value) ? value : plainTextToHtml(value);
+}
+
+const content = await getSiteContent();
+const posts = getNewsPostViews(content);
+const post = posts.find((entry) => entry.id === Astro.params.id || entry.legacyId === Astro.params.id);
+const backHref = "/news/";
+
+if (!post) {
+  throw new Error(`Unknown news post: ${Astro.params.id}`);
+}
+---
+
+<BaseLayout title={`15 love — ${post.title}`}>
+  <div class="layout-desktop">
+  <SiteShell activeTab="news">
+    <div slot="left" class="colblock colblock-left news-left">
+      <section class="block block-news">
+        <div class="blockhead">
+          <h2 class="coltitle">news</h2>
+        </div>
+        <ul class="list">
+          {posts.map((item) => (
+            <li class="li">
+              <span class="heart">♡</span>
+              <a class={`text news-list-link${item.id === post.id ? " is-active" : ""}`} href={item.href} data-astro-prefetch="hover">{item.title}</a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+
+    <div slot="center" class="news-detail-wide">
+      <section class="news-detail-box" aria-label="News detail">
+        <a
+          class="detail-back"
+          href={backHref}
+          aria-label="Back to news"
+          onclick={`if (window.history.length > 1) { window.history.back(); return false; }`}
+        >
+          <span aria-hidden="true">←</span>
+        </a>
+        <article class="news-entry">
+          <header class="news-entry-header">
+            <p class="news-date">{post.dateLabel}</p>
+            <h1 class="news-entry-title">{post.title}</h1>
+          </header>
+
+          {post.newsBlocks.map((block, index) => {
+            if (block.__component === "news.rich-text") {
+              return <div class="news-block news-richtext" set:html={renderNewsBody(block.body)} />;
+            }
+
+            if (!block.image) return null;
+            const size = block.imageWidth ?? "medium";
+            const fallback = newsImageDimensions(size);
+            const width = block.image.width ?? fallback.width;
+            const height = block.image.height ?? fallback.height;
+
+            return (
+              <figure class={`news-block news-media is-${block.imagePosition} is-${size}`}>
+                <img
+                  class="news-image"
+                  src={block.image.url}
+                  alt={block.image.alt}
+                  width={width}
+                  height={height}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchpriority={index === 0 ? "high" : undefined}
+                />
+                {block.caption ? <figcaption class="news-caption">{block.caption}</figcaption> : null}
+              </figure>
+            );
+          })}
+          {post.tags && post.tags.length ? (
+            <footer class="post-tags">
+              <div class="tagsText tagsLinks">
+                {post.tags.map((tag, index) => (
+                  <>
+                    <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
+                    {index < post.tags.length - 1 ? <span>, </span> : null}
+                  </>
+                ))}
+              </div>
+            </footer>
+          ) : null}
+        </article>
+      </section>
+    </div>
+  </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="news">
+      <MobileNewsDetail post={post} />
+    </MobileShell>
+  </div>
+</BaseLayout>
+
+<style>
+  .news-left {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .news-left .block-news {
+    flex: 1;
+    height: auto;
+    margin: 0;
+  }
+
+  .news-detail-wide {
+    height: 100%;
+  }
+
+  .news-detail-box {
+    position: relative;
+    border: 1px solid #000;
+    height: 100%;
+    background: #fff;
+    overflow-y: auto;
+  }
+
+  .detail-back {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid #000;
+    background: #fff;
+    color: #000;
+    text-decoration: none;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .detail-back:hover {
+    background: #fff;
+  }
+
+  .news-entry {
+    min-height: 100%;
+    padding: 16px 22px 18px;
+    background: #fff;
+    box-sizing: border-box;
+  }
+
+  .news-entry::after {
+    content: "";
+    display: block;
+    clear: both;
+  }
+
+  .news-entry-header {
+    width: min(100%, 780px);
+    max-width: none;
+    padding-right: 56px;
+    margin-bottom: 18px;
+  }
+
+  .news-date {
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .news-entry-title {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.1;
+    font-weight: 400;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: manual;
+  }
+
+  .news-block {
+    min-width: 0;
+    margin-bottom: 14px;
+  }
+
+  .news-richtext {
+    max-width: none;
+    font-size: 16px;
+    line-height: 1.36;
+  }
+
+  .news-richtext :global(p) {
+    margin: 0 0 0.85em;
+  }
+
+  .news-richtext :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .news-media {
+    margin: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .news-media.is-left {
+    float: left;
+    margin: 0 20px 14px 0;
+  }
+
+  .news-media.is-right {
+    float: right;
+    margin: 0 0 14px 20px;
+  }
+
+  .news-media.is-center {
+    clear: both;
+    margin: 0 auto 14px;
+  }
+
+  .news-media.is-full {
+    clear: both;
+    width: 100%;
+    max-width: 636px;
+  }
+
+  .news-media.is-xs {
+    width: 140px;
+  }
+
+  .news-media.is-narrow {
+    width: 220px;
+  }
+
+  .news-media.is-medium {
+    width: 320px;
+  }
+
+  .news-media.is-wide {
+    width: 460px;
+  }
+
+  .news-media.is-xl {
+    width: 540px;
+  }
+
+  .news-media.is-max {
+    width: 636px;
+  }
+
+  .news-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #000;
+    object-fit: cover;
+  }
+
+  .news-caption {
+    max-width: 32ch;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .news-list-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .news-list-link:hover,
+  .news-list-link.is-active {
+    text-decoration: underline;
+  }
+
+  .post-tags {
+    clear: both;
+    margin-top: 18px;
+  }
+
+  .post-tags .tagsText {
+    display: inline-block;
+    margin-top: 0;
+    padding: 8px 10px;
+    border: 1px solid #000;
+    background: #fff;
+  }
+
+  .tagsLinks {
+    display: block;
+  }
+
+  .tagLink {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .tagLink:hover {
+    text-decoration: underline;
+  }
+</style>

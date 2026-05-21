@@ -1,0 +1,50 @@
+---
+import type { EventPostView } from "../../lib/postViews";
+import MobileDetailTop from "./MobileDetailTop.astro";
+
+type Props = {
+  post: EventPostView;
+};
+
+const { post } = Astro.props;
+---
+
+<article class="m-detail">
+  <MobileDetailTop backHref="/events/" backLabel="Back to events" tags={post.tags} />
+  <p class="m-detail-date">{post.dateLabel}</p>
+  <h1>{post.title}</h1>
+  {post.venue ? <p class="m-event-venue">{post.venue}</p> : null}
+  {post.image?.url ? (
+    <img
+      class="m-event-image"
+      src={post.image.url}
+      alt={post.image.alt}
+      width={post.image.width ?? 720}
+      height={post.image.height ?? 720}
+      loading="eager"
+      decoding="async"
+      fetchpriority="high"
+    />
+  ) : null}
+  {post.body ? <div class="m-event-body">{post.body}</div> : null}
+</article>
+
+<style>
+  .m-event-venue {
+    margin: 0 0 10px;
+    font-family: "TT2020 Style B", "Inter", system-ui, sans-serif;
+    font-size: var(--m-type-meta);
+  }
+
+  .m-event-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #000;
+    margin-bottom: 12px;
+  }
+
+  .m-event-body {
+    white-space: pre-line;
+  }
+</style>

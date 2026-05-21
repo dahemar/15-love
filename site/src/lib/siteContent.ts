@@ -1,4 +1,4 @@
-import type { SiteContent } from "../data/siteContent";
+import type { EventMediaBlock, SiteContent } from "../data/siteContent";
 import { resolveStrapiToken, resolveStrapiUrl } from "./cmsConfig";
 import { normalizeNewsImageWidth } from "./newsImageWidth";
 import { buildPostHref } from "./postRoutes";
@@ -153,6 +153,13 @@ function normalizeEventImagePosition(value: unknown): "left" | "right" | "full" 
   return "left";
 }
 
+function normalizeEventImageWidth(value: unknown): EventMediaBlock["imageWidth"] {
+  const normalized = normalizeNewsImageWidth(value);
+  if (normalized === "xs" || normalized === "narrow") return "narrow";
+  if (normalized === "wide" || normalized === "xl" || normalized === "max") return "wide";
+  return "medium";
+}
+
 function isHtmlLikeText(value: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(value);
 }
@@ -222,59 +229,6 @@ function pushNewsRichTextBlock(parsedBlocks: NewsPost["newsBlocks"], body: strin
   });
 }
 
-type ParsedNewsSectionFields = {
-  body?: string;
-  id?: unknown;
-  image?: unknown;
-  imageUrl?: unknown;
-  imageAlt?: unknown;
-  caption?: unknown;
-  imagePosition?: unknown;
-  imageWidth?: unknown;
-  imageParagraph?: unknown;
-};
-
-/** Legacy Strapi `news.section` → rich-text + `media` blocks (with imageWidth). */
-function pushNewsSectionBlocks(
-  parsedBlocks: NewsPost["newsBlocks"],
-  fields: ParsedNewsSectionFields,
-  baseUrl: string,
-) {
-  const body = typeof fields.body === "string" ? fields.body.trim() : "";
-  const image = parseImageSource(fields.image, baseUrl, fields.imageUrl, fields.imageAlt ?? fields.caption);
-  const sections = body ? splitNewsSectionBody(body) : [];
-  const imageParagraph =
-    typeof fields.imageParagraph === "number" && fields.imageParagraph > 0 && sections.length > 0
-      ? Math.min(fields.imageParagraph, sections.length)
-      : 1;
-
-  if (sections.length > 0) {
-    for (const [index, section] of sections.entries()) {
-      if (image && index === imageParagraph - 1) {
-        pushNewsMediaBlock(parsedBlocks, image, {
-          caption: fields.caption,
-          imagePosition: fields.imagePosition,
-          imageWidth: fields.imageWidth,
-          imageParagraph: fields.imageParagraph,
-        });
-      }
-
-      pushNewsRichTextBlock(parsedBlocks, section, index === 0 ? fields.id : undefined);
-    }
-    return;
-  }
-
-  if (image) {
-    pushNewsMediaBlock(parsedBlocks, image, {
-      caption: fields.caption,
-      imagePosition: fields.imagePosition,
-      imageWidth: fields.imageWidth,
-      imageParagraph: fields.imageParagraph,
-    });
-  }
-  if (body) pushNewsRichTextBlock(parsedBlocks, body, fields.id);
-}
-
 type NewsRichTextBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "news.rich-text" }>;
 type NewsMediaBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "media" }>;
 
@@ -312,7 +266,7 @@ function coalesceBodyWithMediaBlocks(parsedBlocks: NewsPost["newsBlocks"]): News
   if (richBlocks.length + mediaBlocks.length !== parsedBlocks.length) return parsedBlocks;
 
   const rich = richBlocks[0];
-  const body = rich.body.trim();
+  const body = (rich.body ?? "").trim();
   const sections = splitNewsSectionBody(body);
   const merged: NewsPost["newsBlocks"] = [];
 
@@ -468,9 +422,10 @@ function pickPostThumbnail(src: Record<string, unknown>, baseUrl: string): { src
     for (const block of src.newsBlocks) {
       if (!block || typeof block !== "object") continue;
       const parsed = parseStrapiEntity(block);
-      if (!isNewsMediaComponent(parsed.__component)) continue;
-      const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
-      if (image) return { src: image.src, alt: image.alt };
+      if (parsed.__component === "news.section" || isNewsMediaComponent(parsed.__component)) {
+        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+        if (image) return { src: image.src, alt: image.alt };
+      }
     }
   }
 
@@ -594,7 +549,18 @@ function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPos
       }
 
       if (parsed.__component === "news.section") {
-        pushNewsSectionBlocks(parsedBlocks, parsed, baseUrl);
+        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+        if (body) pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
+        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+        if (image) {
+          pushNewsMediaBlock(parsedBlocks, image, {
+            id: parsed.id,
+            caption: parsed.caption,
+            imagePosition: parsed.imagePosition,
+            imageWidth: parsed.imageWidth,
+            imageParagraph: parsed.imageParagraph,
+          });
+        }
         continue;
       }
 
@@ -660,16 +626,18 @@ function buildNewsPosts(items: unknown[], baseUrl: string): NewsPost[] {
     if (!title) continue;
 
     const newsBlocks = parseNewsBlocks(src, baseUrl);
-    if (!newsBlocks.length) continue;
+    const summary = typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined;
+    if (!newsBlocks.length && !summary) continue;
 
-    posts.push({
+    const postUntyped: Record<string, unknown> = {
       id: resolvePostId(item, src, title),
       legacyId: resolveLegacyPostId(item, src),
       title,
-      summary: typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined,
+      summary,
       publishedAt: resolvePostDate(src),
       newsBlocks,
-    });
+    };
+    posts.push(postUntyped as NewsPost);
   }
 
   posts.sort((left, right) => new Date(right.publishedAt ?? 0).getTime() - new Date(left.publishedAt ?? 0).getTime());
@@ -708,7 +676,7 @@ function parseEventBlocks(src: Record<string, unknown>, baseUrl: string): EventP
 
       if (parsed.__component === "events.media") {
         const image = parseImageLike(parsed.image, baseUrl);
-        const block: EventPost["eventBlocks"][number] = {
+        const block: EventMediaBlock = {
           __component: "events.media",
           id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
           image: image
@@ -721,7 +689,7 @@ function parseEventBlocks(src: Record<string, unknown>, baseUrl: string): EventP
             : null,
           caption: typeof parsed.caption === "string" ? parsed.caption.trim() : undefined,
           imagePosition: normalizeEventImagePosition(parsed.imagePosition),
-          imageWidth: normalizeNewsImageWidth(parsed.imageWidth),
+          imageWidth: normalizeEventImageWidth(parsed.imageWidth),
         };
         const imageParagraph = normalizeNewsImageParagraph(parsed.imageParagraph);
         if (imageParagraph) block.imageParagraph = imageParagraph;
@@ -784,7 +752,8 @@ function releaseDetailsToCredits(details: Record<string, unknown>): ReleaseCard[
   const credits: ReleaseCard["credits"] = [];
 
   for (const field of RELEASE_CREDIT_FIELDS) {
-    const value = typeof details[field.key] === "string" ? details[field.key].trim() : "";
+    const raw = details[field.key];
+    const value = typeof raw === "string" ? raw.trim() : "";
     if (value) credits.push({ label: field.label, value });
   }
 
@@ -849,6 +818,40 @@ function parseReleaseLinks(src: Record<string, unknown>): ReleaseCard["links"] {
   return links;
 }
 
+const CREDIT_LABEL_PATTERNS = RELEASE_CREDIT_FIELDS.map(
+  (f) => f.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+);
+
+function stripTaggedCreditLines(body: string): string {
+  const plainText = isHtmlLikeText(body) ? stripHtml(body) : body;
+  const lines = plainText
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const escapedPatterns = CREDIT_LABEL_PATTERNS;
+  const isCreditLine = (line: string): boolean => {
+    for (const pattern of escapedPatterns) {
+      if (new RegExp(`^${pattern}`, "i").test(line)) return true;
+    }
+    const generic = line.match(/^([^:]+):\s*(.+)$/);
+    if (generic) {
+      const rawLabel = generic[1].trim().toLowerCase();
+      if (
+        RELEASE_CREDIT_FIELDS.find(
+          (entry) => entry.label.replace(/:$/, "").trim().toLowerCase() === rawLabel,
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const filtered = lines.filter((line) => !isCreditLine(line));
+  return filtered.join("\n\n").trim();
+}
+
 function parseReleaseCredits(src: Record<string, unknown>): ReleaseCard["credits"] {
   const details = parseStrapiEntity(src.releaseDetails);
   if (details && typeof details === "object") {
@@ -903,6 +906,8 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
         credits = parsedBody.credits;
         body = parsedBody.remainder;
       }
+    } else if (credits.length > 0 && body) {
+      body = stripTaggedCreditLines(body);
     }
 
     const image = pickPostThumbnail(src, baseUrl);
@@ -925,12 +930,12 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
 }
 
 function getNewsExcerpt(post: NewsPost): string {
-  if (post.summary && post.summary.trim().length > 0) return clampText(post.summary, 170);
+  if (post.summary && post.summary.trim().length > 0) return stripHtml(post.summary);
   const rich = post.newsBlocks.find(
     (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "news.rich-text" }> =>
       block.__component === "news.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
   );
-  return clampText(rich?.body ?? post.title, 170);
+  return stripHtml(rich?.body ?? post.title);
 }
 
 function getNewsImage(post: NewsPost): SiteContent["homeFeedPosts"][number]["image"] {
@@ -943,22 +948,22 @@ function getNewsImage(post: NewsPost): SiteContent["homeFeedPosts"][number]["ima
 }
 
 function getEventExcerpt(post: EventPost): string {
-  if (post.summary && post.summary.trim().length > 0) return clampText(post.summary, 170);
+  if (post.summary && post.summary.trim().length > 0) return stripHtml(post.summary);
 
   const detail = post.eventBlocks.find(
     (block): block is Extract<EventPost["eventBlocks"][number], { __component: "events.details" }> =>
       block.__component === "events.details" && typeof block.description === "string" && block.description.trim().length > 0,
   );
-  if (detail?.description) return clampText(detail.description, 170);
+  if (detail?.description) return stripHtml(detail.description);
 
   const rich = post.eventBlocks.find(
     (block): block is Extract<EventPost["eventBlocks"][number], { __component: "events.rich-text" }> =>
       block.__component === "events.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
   );
-  if (rich?.body) return clampText(rich.body, 170);
+  if (rich?.body) return stripHtml(rich.body);
 
-  if (post.body && post.body.trim().length > 0) return clampText(post.body, 170);
-  return clampText(post.title, 170);
+  if (post.body && post.body.trim().length > 0) return stripHtml(post.body);
+  return stripHtml(post.title);
 }
 
 function getEventImage(post: EventPost): SiteContent["homeFeedPosts"][number]["image"] {
@@ -971,13 +976,18 @@ function getEventImage(post: EventPost): SiteContent["homeFeedPosts"][number]["i
 }
 
 function getFeedImage(image: SiteContent["homeFeedPosts"][number]["image"]): SiteContent["homeFeedPosts"][number]["image"] {
+  if (!image?.src?.trim()) return null;
   return image;
 }
 
 function getReleaseExcerpt(card: ReleaseCard): string {
-  if (card.summary && card.summary.trim().length > 0) return clampText(card.summary, 170);
-  if (card.body && card.body.trim().length > 0) return clampText(card.body, 170);
-  return clampText(card.title ?? "release", 170);
+  if (card.summary && card.summary.trim().length > 0) return stripHtml(card.summary);
+  if (card.body && card.body.trim().length > 0) return stripHtml(card.body);
+  if (card.credits.length > 0) {
+    const line = card.credits.map((credit) => credit.value).filter(Boolean).join(" · ");
+    return stripHtml(line);
+  }
+  return stripHtml(card.title ?? "release");
 }
 
 function findNewsPost(entry: ArchiveEntry, posts: NewsPost[]): NewsPost | undefined {
@@ -1011,7 +1021,7 @@ function buildHomeFeedPosts(content: SiteContent): SiteContent["homeFeedPosts"] 
           id: entry.id,
           category: entry.category,
           title: entry.title,
-          excerpt: post ? getNewsExcerpt(post) : clampText(entry.title, 170),
+          excerpt: post ? getNewsExcerpt(post) : stripHtml(entry.title),
           image: getFeedImage(post ? getNewsImage(post) ?? entry.thumbnail : entry.thumbnail),
           publishedAt: entry.publishedAt,
           dateLabel: entry.dateLabel,
@@ -1025,7 +1035,7 @@ function buildHomeFeedPosts(content: SiteContent): SiteContent["homeFeedPosts"] 
           id: entry.id,
           category: entry.category,
           title: entry.title,
-          excerpt: post ? getEventExcerpt(post) : clampText(entry.title, 170),
+          excerpt: post ? getEventExcerpt(post) : stripHtml(entry.title),
           image: getFeedImage(post ? getEventImage(post) ?? entry.thumbnail : entry.thumbnail),
           publishedAt: entry.publishedAt,
           dateLabel: entry.dateLabel,
@@ -1038,7 +1048,7 @@ function buildHomeFeedPosts(content: SiteContent): SiteContent["homeFeedPosts"] 
         id: entry.id,
         category: entry.category,
         title: entry.title,
-        excerpt: card ? getReleaseExcerpt(card) : clampText(entry.title, 170),
+        excerpt: card ? getReleaseExcerpt(card) : stripHtml(entry.title),
         image: getFeedImage(card ? card.image ?? entry.thumbnail : entry.thumbnail),
         publishedAt: entry.publishedAt,
         dateLabel: entry.dateLabel,

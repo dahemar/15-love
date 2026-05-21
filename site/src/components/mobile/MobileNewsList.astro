@@ -1,0 +1,31 @@
+---
+import { getSiteContent } from "../../lib/siteContent";
+import { getNewsPostViews } from "../../lib/postViews";
+import { clampText } from "../../lib/mobileExcerpt";
+import MobilePostCard from "./MobilePostCard.astro";
+
+const content = await getSiteContent();
+const posts = getNewsPostViews(content);
+
+function newsExcerpt(post: (typeof posts)[number]): string {
+  if (post.summary?.trim()) return clampText(post.summary);
+  const rich = post.newsBlocks.find((block) => block.__component === "news.rich-text" && block.body);
+  if (rich?.__component === "news.rich-text" && rich.body) return clampText(rich.body);
+  return "";
+}
+---
+
+<section class="m-panel">
+  <ul class="m-list">
+    {posts.map((post, index) => (
+      <MobilePostCard
+        href={post.href}
+        title={post.title}
+        dateLabel={post.dateLabel}
+        image={post.thumbnail}
+        excerpt={newsExcerpt(post)}
+        eager={index < 2}
+      />
+    ))}
+  </ul>
+</section>

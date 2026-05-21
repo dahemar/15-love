@@ -1,0 +1,15 @@
+---
+import { getSiteContent } from "../../lib/siteContent";
+import { getReleasePostViews } from "../../lib/postViews";
+import MobileThumbGrid from "./MobileThumbGrid.astro";
+
+const content = await getSiteContent();
+const posts = getReleasePostViews(content);
+
+const items = posts.map((post) => ({
+  href: post.href,
+  thumbnail: post.image?.src?.trim() ? { src: post.image.src, alt: post.image.alt } : null,
+}));
+---
+
+<MobileThumbGrid items={items} />

@@ -1,0 +1,16 @@
+---
+import { escapeHtml } from "../../lib/html";
+import { splitAboutParagraphs } from "../../lib/aboutText";
+import { getSiteContent } from "../../lib/siteContent";
+
+const content = await getSiteContent();
+const paragraphs = splitAboutParagraphs(content.about.text);
+---
+
+<section class="m-about-wrap" aria-label="About">
+  <div class="m-about-oval">
+    {paragraphs.map((paragraph) => (
+      <p set:html={escapeHtml(paragraph).replaceAll("\n", "<br />")} />
+    ))}
+  </div>
+</section>

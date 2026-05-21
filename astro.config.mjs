@@ -2,10 +2,9 @@
 import { defineConfig } from 'astro/config';
 
 // https://astro.build/config
-// Run `npm run dev` from the repo root (not site/). Source lives in ./src; env in site/.env.
 export default defineConfig({
-  srcDir: './src',
-  publicDir: './public',
+  srcDir: 'site/src',
+  publicDir: 'site/public',
   compressHTML: true,
   prefetch: {
     defaultStrategy: 'hover',

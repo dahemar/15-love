@@ -1,0 +1,163 @@
+---
+
+
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SiteShell from "../components/SiteShell.astro";
+import MobileShell from "../components/MobileShell.astro";
+import MobileAbout from "../components/mobile/MobileAbout.astro";
+import { splitAboutParagraphs } from "../lib/aboutText";
+import { getSiteContent } from "../lib/siteContent";
+
+const content = await getSiteContent();
+const aboutText = content.about.text;
+const aboutParagraphs = splitAboutParagraphs(aboutText);
+
+const aboutBackgroundImages = [
+  { src: "/assets/FTL001 SUMMER 1 FOR WEB.png", alt: "", position: "is-left" },
+  { src: "/assets/FTL001 SUMMER 2 FOR WEB.png", alt: "", position: "is-center" },
+  { src: "/assets/FTL001 SUMMER 3 FOR WEB.webp", alt: "", position: "is-right" },
+];
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+---
+
+<BaseLayout title="15 love — About">
+  <div class="layout-desktop">
+  <SiteShell activeTab="about">
+    <div slot="page-background" class="about-bg" aria-hidden="true">
+      <div class="about-bg-cluster">
+        {aboutBackgroundImages.map((image) => (
+          <div class={`about-bg-cell ${image.position}`}>
+            <img class="about-bg-img" src={image.src} alt={image.alt} decoding="async" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div slot="center" class="about-center">
+      <section class="about-content" aria-label="About text">
+        <div class="about-oval">
+          {aboutParagraphs.map((paragraph) => (
+            <p set:html={escapeHtml(paragraph).replaceAll("\n", "<br />")} />
+          ))}
+        </div>
+      </section>
+    </div>
+  </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="about">
+      <MobileAbout />
+    </MobileShell>
+  </div>
+</BaseLayout>
+
+<style>
+  .about-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .about-bg-cluster {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: flex-end;
+    justify-items: center;
+    gap: clamp(40px, 7vw, 110px);
+    width: min(88%, 1260px);
+    margin-bottom: 8%;
+    transform: translateY(-6vh);
+  }
+
+  .about-bg-cell {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .about-bg-cell.is-left {
+    transform: translate(8%, -4vh);
+  }
+
+  .about-bg-cell.is-left .about-bg-img {
+    transform: rotate(-4deg);
+  }
+
+  .about-bg-cell.is-center .about-bg-img {
+    transform: rotate(1deg);
+  }
+
+  .about-bg-cell.is-right {
+    transform: translate(-16%, -10vh);
+  }
+
+  .about-bg-cell.is-right .about-bg-img {
+    transform: rotate(4deg);
+  }
+
+  .about-bg-img {
+    display: block;
+    height: min(44vh, 400px);
+    width: auto;
+    max-width: 320px;
+    object-fit: contain;
+    object-position: center bottom;
+    background: transparent;
+  }
+
+  .about-center {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+  }
+
+  .about-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 24px;
+    pointer-events: auto;
+  }
+
+  .about-oval {
+    box-sizing: border-box;
+    width: min(700px, 88vw);
+    aspect-ratio: 2.15 / 1;
+    min-height: 210px;
+    padding: 2.4em 3.6em;
+    border: 1px solid #1d1d1b;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45em;
+  }
+
+  .about-oval p {
+    margin: 0;
+    max-width: 54ch;
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 23px;
+    line-height: 1.42;
+    letter-spacing: 0;
+  }
+</style>

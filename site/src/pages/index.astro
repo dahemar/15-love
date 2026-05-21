@@ -1,0 +1,18 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import MockupPage from "../components/MockupPage.astro";
+import MobileLanding from "../components/mobile/MobileLanding.astro";
+import { mockups } from "../data/mockups";
+
+const m = mockups.splash;
+---
+
+<BaseLayout title={m.title}>
+  <div class="layout-desktop">
+    <MockupPage image={m.image} width={m.size.width} height={m.size.height} hotspots={m.hotspots} />
+  </div>
+
+  <div class="layout-mobile">
+    <MobileLanding />
+  </div>
+</BaseLayout>

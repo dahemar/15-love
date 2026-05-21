@@ -4,16 +4,12 @@ Astro static site. Content comes from **Strapi on Render** at build time (same a
 
 ## Local development
 
-Run commands from the **repo root** (`15 love/`), not from `site/`. Astro reads `./src` and `./public`; only `site/.env` holds Strapi credentials.
-
 ```sh
 cp .env.example site/.env
 # Paste your STRAPI_TOKEN into site/.env
 npm install
 npm run dev
 ```
-
-If releases layout or news content looks stale locally, restart `npm run dev` after `git pull` (the `site/src/` tree is a mirror of `src/`, not a second app).
 
 Verify Strapi:
 

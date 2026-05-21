@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
+import MobileShell from "../components/MobileShell.astro";
+import MobileReleasesGrid from "../components/mobile/MobileReleasesGrid.astro";
 import { getSiteContent } from "../lib/siteContent";
 import { getReleasePostViews } from "../lib/postViews";
 
@@ -9,6 +11,7 @@ const releaseCards = getReleasePostViews(content);
 ---
 
 <BaseLayout title="15 love — Releases">
+  <div class="layout-desktop">
   <SiteShell activeTab="releases">
     <div slot="left" class="colblock colblock-left releases-left">
       <section class="block block-releases-list">
@@ -33,7 +36,7 @@ const releaseCards = getReleasePostViews(content);
             {releaseCards.map((card) => (
               <article class="release-card" id={card.id}>
                 <a class="release-post release-card-link" href={card.href} data-astro-prefetch="hover">
-                  {card.image?.src ? (
+                  {card.image ? (
                     <img
                       class="release-image"
                       src={card.image.src}
@@ -43,16 +46,20 @@ const releaseCards = getReleasePostViews(content);
                       loading="lazy"
                       decoding="async"
                     />
-                  ) : null}
-                  {card.title ? <h3 class="release-title">{card.title}</h3> : null}
-                  <div class="release-credits" aria-label="Release credits">
-                    {card.credits.map((c) => (
-                      <div class="credit-line">
-                        <span class="credit-label">{c.label}</span> <span class="credit-value">{c.value}</span>
-                      </div>
-                    ))}
+                  ) : (
+                    <div class="release-image release-image-empty" aria-hidden="true"></div>
+                  )}
+                  <div class="release-meta">
+                    {card.title ? <h3 class="release-title">{card.title}</h3> : null}
+                    <div class="release-credits" aria-label="Release credits">
+                      {card.credits.map((c) => (
+                        <div class="credit-line">
+                          <span class="credit-label">{c.label}</span> <span class="credit-value">{c.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {card.body ? <p class="release-body">{card.body}</p> : null}
                   </div>
-                  {card.body ? <p class="release-body">{card.body}</p> : null}
                 </a>
               </article>
             ))}
@@ -61,6 +68,13 @@ const releaseCards = getReleasePostViews(content);
       </section>
     </div>
   </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="releases">
+      <MobileReleasesGrid />
+    </MobileShell>
+  </div>
 </BaseLayout>
 
 <style>
@@ -108,13 +122,10 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-post {
-    display: block;
-  }
-
-  .release-post::after {
-    content: "";
-    display: table;
-    clear: both;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    column-gap: 14px;
+    align-items: start;
   }
 
   .release-card-link,
@@ -129,34 +140,41 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-image {
-    float: left;
     width: 340px;
     height: 340px;
-    margin: 0 14px 10px 0;
     object-fit: cover;
     border: 1px solid #000;
     display: block;
-    shape-outside: margin-box;
+  }
+
+  .release-meta {
+    min-width: 0;
+    width: 100%;
   }
 
   .release-title {
-    display: block;
-  }
     margin: 0 0 12px;
     font-size: 22px;
     line-height: 1.2;
     font-weight: 400;
   }
 
+  .release-image-empty {
+    border: 1px solid #000;
+    background: transparent;
+  }
+
   .release-credits {
-    display: contents;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 14px;
+    font-size: 16px;
+    line-height: 1.2;
   }
 
   .credit-line {
-    display: block;
-    margin: 0 0 2px;
-    font-size: 16px;
-    line-height: 1.2;
+    margin: 0;
   }
 
   .credit-label {
@@ -170,7 +188,6 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-body {
-    display: block;
     margin: 0;
     font-size: 15.4px;
     line-height: 1.25;

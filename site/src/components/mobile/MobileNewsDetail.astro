@@ -1,0 +1,66 @@
+---
+import { newsImageDimensions } from "../../lib/newsImageWidth";
+import { renderRichBody } from "../../lib/html";
+import type { NewsPostView } from "../../lib/postViews";
+import MobileDetailTop from "./MobileDetailTop.astro";
+
+type Props = {
+  post: NewsPostView;
+};
+
+const { post } = Astro.props;
+---
+
+<article class="m-detail">
+  <MobileDetailTop backHref="/news/" backLabel="Back to news" tags={post.tags} />
+  <p class="m-detail-date">{post.dateLabel}</p>
+  <h1>{post.title}</h1>
+
+  {post.newsBlocks.map((block, index) => {
+    if (block.__component === "news.rich-text") {
+      return <div class="m-news-body" set:html={renderRichBody(block.body)} />;
+    }
+
+    if (!block.image) return null;
+    const size = block.imageWidth ?? "medium";
+    const fallback = newsImageDimensions(size);
+
+    return (
+      <figure class="m-news-media">
+        <img
+          src={block.image.url}
+          alt={block.image.alt}
+          width={block.image.width ?? fallback.width}
+          height={block.image.height ?? fallback.height}
+          loading={index === 0 ? "eager" : "lazy"}
+          decoding="async"
+          fetchpriority={index === 0 ? "high" : undefined}
+        />
+        {block.caption ? <figcaption>{block.caption}</figcaption> : null}
+      </figure>
+    );
+  })}
+</article>
+
+<style>
+  .m-news-body :global(p) {
+    margin: 0 0 0.75em;
+  }
+
+  .m-news-media {
+    margin: 0 0 12px;
+  }
+
+  .m-news-media img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #000;
+  }
+
+  .m-news-media figcaption {
+    margin-top: 6px;
+    font-size: var(--m-type-small);
+    line-height: 1.25;
+  }
+</style>
