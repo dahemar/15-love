@@ -157,16 +157,9 @@ function normalizeNewsImageParagraph(value: unknown): number | undefined {
   return undefined;
 }
 
-function normalizeEventImagePosition(value: unknown): "left" | "right" | "full" {
-  if (value === "right" || value === "full") return value;
+function normalizeEventImagePosition(value: unknown): EventMediaBlock["imagePosition"] {
+  if (value === "right" || value === "center" || value === "full") return value;
   return "left";
-}
-
-function normalizeEventImageWidth(value: unknown): EventMediaBlock["imageWidth"] {
-  const normalized = normalizeNewsImageWidth(value);
-  if (normalized === "xs" || normalized === "narrow") return "narrow";
-  if (normalized === "wide" || normalized === "xl" || normalized === "max") return "wide";
-  return "medium";
 }
 
 function isHtmlLikeText(value: string): boolean {
@@ -653,6 +646,158 @@ function buildNewsPosts(items: unknown[], baseUrl: string): NewsPost[] {
   return posts;
 }
 
+type EventRichTextBlockParsed = Extract<EventPost["eventBlocks"][number], { __component: "events.rich-text" }>;
+type EventMediaBlockParsed = Extract<EventPost["eventBlocks"][number], { __component: "events.media" }>;
+
+function pushEventRichTextBlock(parsedBlocks: EventPost["eventBlocks"], body: string, id?: unknown) {
+  const trimmed = body.trim();
+  if (!trimmed) return;
+
+  parsedBlocks.push({
+    __component: "events.rich-text",
+    id: typeof id === "number" ? id : parsedBlocks.length + 1,
+    body: trimmed,
+  });
+}
+
+function pushEventMediaBlock(
+  parsedBlocks: EventPost["eventBlocks"],
+  image: { src: string; alt: string; width?: number; height?: number },
+  options: {
+    id?: unknown;
+    caption?: unknown;
+    imagePosition?: unknown;
+    imageWidth?: unknown;
+    imageParagraph?: unknown;
+  },
+) {
+  const block: EventMediaBlock = {
+    __component: "events.media",
+    id: typeof options.id === "number" ? options.id : parsedBlocks.length + 1,
+    image: {
+      url: image.src,
+      alt: image.alt,
+      width: image.width,
+      height: image.height,
+    },
+    caption: typeof options.caption === "string" && options.caption.trim().length > 0 ? options.caption.trim() : undefined,
+    imagePosition: normalizeEventImagePosition(options.imagePosition),
+    imageWidth: normalizeNewsImageWidth(options.imageWidth),
+  };
+
+  const imageParagraph = normalizeNewsImageParagraph(options.imageParagraph);
+  if (imageParagraph) block.imageParagraph = imageParagraph;
+
+  parsedBlocks.push(block);
+}
+
+function pushEventMediaFromBlock(parsedBlocks: EventPost["eventBlocks"], media: EventMediaBlockParsed) {
+  if (!media.image) return;
+  pushEventMediaBlock(
+    parsedBlocks,
+    {
+      src: media.image.url,
+      alt: media.image.alt,
+      width: media.image.width,
+      height: media.image.height,
+    },
+    {
+      id: media.id,
+      caption: media.caption,
+      imagePosition: media.imagePosition,
+      imageWidth: media.imageWidth,
+      imageParagraph: media.imageParagraph,
+    },
+  );
+}
+
+function hasEventRichTextBlock(parsedBlocks: EventPost["eventBlocks"]): boolean {
+  return parsedBlocks.some(
+    (block) =>
+      block.__component === "events.rich-text" &&
+      typeof block.body === "string" &&
+      block.body.trim().length > 0,
+  );
+}
+
+function ensureTopLevelEventBody(parsedBlocks: EventPost["eventBlocks"], src: Record<string, unknown>) {
+  const body = typeof src.body === "string" ? src.body.trim() : "";
+  if (!body || hasEventRichTextBlock(parsedBlocks)) return;
+  parsedBlocks.push({
+    __component: "events.rich-text",
+    id: 0,
+    body,
+  });
+}
+
+function coalesceEventBodyWithMediaBlocks(parsedBlocks: EventPost["eventBlocks"]): EventPost["eventBlocks"] {
+  const richBlocks = parsedBlocks.filter(
+    (block): block is EventRichTextBlockParsed =>
+      block.__component === "events.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
+  );
+  const mediaBlocks = parsedBlocks.filter(
+    (block): block is EventMediaBlockParsed => block.__component === "events.media" && !!block.image,
+  );
+
+  if (richBlocks.length !== 1 || mediaBlocks.length === 0) return parsedBlocks;
+  if (richBlocks.length + mediaBlocks.length !== parsedBlocks.length) return parsedBlocks;
+
+  const rich = richBlocks[0];
+  const body = (rich.body ?? "").trim();
+  const sections = splitNewsSectionBody(body);
+  const merged: EventPost["eventBlocks"] = [];
+
+  const mediaByParagraph = mediaBlocks.map((media) => ({
+    media,
+    paragraph: normalizeNewsImageParagraph(media.imageParagraph) ?? 1,
+  }));
+
+  const appendMediaForParagraph = (paragraphNumber: number) => {
+    for (const { media, paragraph } of mediaByParagraph) {
+      if (paragraph === paragraphNumber) pushEventMediaFromBlock(merged, media);
+    }
+  };
+
+  if (sections.length > 0) {
+    for (const [index, section] of sections.entries()) {
+      appendMediaForParagraph(index + 1);
+      pushEventRichTextBlock(merged, section, index === 0 ? rich.id : undefined);
+    }
+
+    for (const { media, paragraph } of mediaByParagraph) {
+      if (paragraph > sections.length) pushEventMediaFromBlock(merged, media);
+    }
+
+    return merged;
+  }
+
+  appendMediaForParagraph(1);
+  pushEventRichTextBlock(merged, body, rich.id);
+  return merged;
+}
+
+function finalizeEventBlocks(parsedBlocks: EventPost["eventBlocks"], src: Record<string, unknown>, baseUrl: string) {
+  ensureTopLevelEventBody(parsedBlocks, src);
+
+  const hasInlineMedia = parsedBlocks.some((block) => block.__component === "events.media" && !!block.image);
+  if (!hasInlineMedia) {
+    const fallbackTopLevelImage = parseImageLike(src.image, baseUrl);
+    if (fallbackTopLevelImage) {
+      pushEventMediaBlock(parsedBlocks, fallbackTopLevelImage, {
+        imagePosition: "left",
+        imageWidth: "medium",
+      });
+    }
+  }
+
+  const detailsBlocks = parsedBlocks.filter((block) => block.__component === "events.details");
+  const flowBlocks = parsedBlocks.filter((block) => block.__component !== "events.details");
+  const coalesced = coalesceEventBodyWithMediaBlocks(flowBlocks);
+
+  parsedBlocks.length = 0;
+  parsedBlocks.push(...detailsBlocks, ...coalesced);
+}
+
 function parseEventBlocks(src: Record<string, unknown>, baseUrl: string): EventPost["eventBlocks"] {
   const blocks: EventPost["eventBlocks"] = [];
 
@@ -674,60 +819,59 @@ function parseEventBlocks(src: Record<string, unknown>, baseUrl: string): EventP
 
       if (parsed.__component === "events.rich-text") {
         const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
-        blocks.push({
-          __component: "events.rich-text",
-          id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
-          title: typeof parsed.title === "string" ? parsed.title.trim() : undefined,
-          body: body || undefined,
-        });
+        if (!body) continue;
+        pushEventRichTextBlock(blocks, body, parsed.id);
+        continue;
+      }
+
+      if (parsed.__component === "events.section") {
+        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+        if (body) pushEventRichTextBlock(blocks, body, parsed.id);
+        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+        if (image) {
+          pushEventMediaBlock(blocks, image, {
+            id: parsed.id,
+            caption: parsed.caption,
+            imagePosition: parsed.imagePosition,
+            imageWidth: parsed.imageWidth,
+            imageParagraph: parsed.imageParagraph,
+          });
+        }
         continue;
       }
 
       if (parsed.__component === "events.media") {
-        const image = parseImageLike(parsed.image, baseUrl);
-        const block: EventMediaBlock = {
-          __component: "events.media",
-          id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
-          image: image
-            ? {
-                url: image.src,
-                alt: image.alt,
-                width: image.width,
-                height: image.height,
-              }
-            : null,
-          caption: typeof parsed.caption === "string" ? parsed.caption.trim() : undefined,
-          imagePosition: normalizeEventImagePosition(parsed.imagePosition),
-          imageWidth: normalizeEventImageWidth(parsed.imageWidth),
-        };
-        const imageParagraph = normalizeNewsImageParagraph(parsed.imageParagraph);
-        if (imageParagraph) block.imageParagraph = imageParagraph;
-        blocks.push(block);
+        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+        if (!image) continue;
+        pushEventMediaBlock(blocks, image, {
+          id: parsed.id,
+          caption: parsed.caption,
+          imagePosition: parsed.imagePosition,
+          imageWidth: parsed.imageWidth,
+          imageParagraph: parsed.imageParagraph,
+        });
       }
     }
   }
 
-  if (blocks.length > 0) return blocks;
-
-  const body = typeof src.body === "string" ? src.body.trim() : "";
-  blocks.push({
-    __component: "events.details",
-    id: 1,
-    description: body || undefined,
-  });
-
-  const fallbackImage = parseImageLike(src.image, baseUrl);
-  if (fallbackImage) {
+  if (blocks.length === 0) {
+    const body = typeof src.body === "string" ? src.body.trim() : "";
     blocks.push({
-      __component: "events.media",
-      id: 2,
-      image: { url: fallbackImage.src, alt: fallbackImage.alt, width: fallbackImage.width, height: fallbackImage.height },
-      caption: undefined,
-      imagePosition: "left",
-      imageWidth: "medium",
+      __component: "events.details",
+      id: 1,
+      description: body || undefined,
     });
+
+    const fallbackImage = parseImageLike(src.image, baseUrl);
+    if (fallbackImage) {
+      pushEventMediaBlock(blocks, fallbackImage, {
+        imagePosition: "left",
+        imageWidth: "medium",
+      });
+    }
   }
 
+  finalizeEventBlocks(blocks, src, baseUrl);
   return blocks;
 }
 

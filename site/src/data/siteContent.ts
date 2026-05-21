@@ -49,8 +49,8 @@ export type EventMediaBlock = {
   id: number;
   image: { url: string; alt: string; width?: number; height?: number } | null;
   caption?: string;
-  imagePosition: "left" | "right" | "full";
-  imageWidth: "narrow" | "medium" | "wide";
+  imagePosition: "left" | "right" | "center" | "full";
+  imageWidth: NewsImageWidth;
   imageParagraph?: number;
 };
 

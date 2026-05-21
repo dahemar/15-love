@@ -1,4 +1,6 @@
 ---
+import { newsImageDimensions } from "../../lib/newsImageWidth";
+import { renderRichBody } from "../../lib/html";
 import type { EventPostView } from "../../lib/postViews";
 import MobileDetailTop from "./MobileDetailTop.astro";
 
@@ -7,26 +9,48 @@ type Props = {
 };
 
 const { post } = Astro.props;
+
+function formatDateLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en", { month: "short", year: "numeric" }).format(date);
+}
+
+const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
 ---
 
 <article class="m-detail">
   <MobileDetailTop backHref="/events/" backLabel="Back to events" tags={post.tags} />
-  <p class="m-detail-date">{post.dateLabel}</p>
+  {headerDate ? <p class="m-detail-date">{headerDate}</p> : null}
   <h1>{post.title}</h1>
   {post.venue ? <p class="m-event-venue">{post.venue}</p> : null}
-  {post.image?.url ? (
-    <img
-      class="m-event-image"
-      src={post.image.url}
-      alt={post.image.alt}
-      width={post.image.width ?? 720}
-      height={post.image.height ?? 720}
-      loading="eager"
-      decoding="async"
-      fetchpriority="high"
-    />
-  ) : null}
-  {post.body ? <div class="m-event-body">{post.body}</div> : null}
+
+  {post.eventBlocks.map((block, index) => {
+    if (block.__component === "events.details") return null;
+
+    if (block.__component === "events.rich-text") {
+      return <div class="m-event-body" set:html={renderRichBody(block.body)} />;
+    }
+
+    if (block.__component !== "events.media" || !block.image) return null;
+    const size = block.imageWidth ?? "medium";
+    const fallback = newsImageDimensions(size);
+
+    return (
+      <figure class="m-event-media">
+        <img
+          src={block.image.url}
+          alt={block.image.alt}
+          width={block.image.width ?? fallback.width}
+          height={block.image.height ?? fallback.height}
+          loading={index === 0 ? "eager" : "lazy"}
+          decoding="async"
+          fetchpriority={index === 0 ? "high" : undefined}
+        />
+        {block.caption ? <figcaption>{block.caption}</figcaption> : null}
+      </figure>
+    );
+  })}
 </article>
 
 <style>
@@ -36,15 +60,24 @@ const { post } = Astro.props;
     font-size: var(--m-type-meta);
   }
 
-  .m-event-image {
+  .m-event-media {
+    margin: 0 0 12px;
+  }
+
+  .m-event-media img {
     display: block;
     width: 100%;
     height: auto;
     border: 1px solid #000;
-    margin-bottom: 12px;
   }
 
-  .m-event-body {
-    white-space: pre-line;
+  .m-event-media figcaption {
+    margin-top: 6px;
+    font-size: var(--m-type-small);
+    line-height: 1.25;
+  }
+
+  .m-event-body :global(p) {
+    margin: 0 0 0.75em;
   }
 </style>

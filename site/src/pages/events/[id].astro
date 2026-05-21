@@ -3,18 +3,21 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteShell from "../../components/SiteShell.astro";
 import MobileShell from "../../components/MobileShell.astro";
 import MobileEventDetail from "../../components/mobile/MobileEventDetail.astro";
+import { renderRichBody } from "../../lib/html";
 import { getSiteContent } from "../../lib/siteContent";
-import { getEventPostViews } from "../../lib/postViews";
+import { newsImageDimensions } from "../../lib/newsImageWidth";
+import { getEventPostViews, getEventStaticPathParams } from "../../lib/postViews";
+import "../../styles/events-detail.css";
 
 export async function getStaticPaths() {
   const content = await getSiteContent();
-  return getEventPostViews(content).flatMap((post) => {
-    const paths = [{ params: { id: post.id } }];
-    if (post.legacyId && post.legacyId !== post.id) {
-      paths.push({ params: { id: post.legacyId } });
-    }
-    return paths;
-  });
+  return getEventStaticPathParams(content).map(({ id }) => ({ params: { id } }));
+}
+
+function formatDateLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en", { month: "short", year: "numeric" }).format(date);
 }
 
 const content = await getSiteContent();
@@ -25,6 +28,8 @@ const backHref = "/events/";
 if (!post) {
   throw new Error(`Unknown event post: ${Astro.params.id}`);
 }
+
+const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
 ---
 
 <BaseLayout title={`15 love — ${post.title}`}>
@@ -56,35 +61,48 @@ if (!post) {
         >
           <span aria-hidden="true">←</span>
         </a>
-        <article class="event-detail">
-          {post.image ? (
-            <img
-              class="event-image"
-              src={post.image.url}
-              alt={post.image.alt}
-              width={post.image.width ?? 640}
-              height={post.image.height ?? 420}
-              loading="eager"
-              decoding="async"
-              fetchpriority="high"
-            />
-          ) : (
-            <div class="event-image event-image-empty" aria-hidden="true"></div>
-          )}
-
-          <div class="event-meta">
-            <p class="event-date">{post.dateLabel}</p>
-            <h1 class="event-title">{post.title}</h1>
+        <article class="event-entry">
+          <header class="event-entry-header">
+            {headerDate ? <p class="event-date">{headerDate}</p> : null}
+            <h1 class="event-entry-title">{post.title}</h1>
             {post.venue ? <p class="event-subline">{post.venue}</p> : null}
-            {post.body ? <p class="event-body">{post.body}</p> : null}
-          </div>
+          </header>
+
+          {post.eventBlocks.map((block, index) => {
+            if (block.__component === "events.details") return null;
+
+            if (block.__component === "events.rich-text") {
+              return <div class="event-block event-richtext" set:html={renderRichBody(block.body)} />;
+            }
+
+            if (block.__component !== "events.media" || !block.image) return null;
+            const size = block.imageWidth ?? "medium";
+            const fallback = newsImageDimensions(size);
+
+            return (
+              <figure class={`event-block event-media is-${block.imagePosition} is-${size}`}>
+                <img
+                  class="event-image"
+                  src={block.image.url}
+                  alt={block.image.alt}
+                  width={block.image.width ?? fallback.width}
+                  height={block.image.height ?? fallback.height}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchpriority={index === 0 ? "high" : undefined}
+                />
+                {block.caption ? <figcaption class="event-caption">{block.caption}</figcaption> : null}
+              </figure>
+            );
+          })}
+
           {post.tags && post.tags.length ? (
             <footer class="post-tags">
               <div class="tagsText tagsLinks">
-                {post.tags.map((tag, index) => (
+                {post.tags.map((tag, tagIndex) => (
                   <>
                     <a class="tagLink" href={`/archive?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">{tag}</a>
-                    {index < post.tags.length - 1 ? <span>, </span> : null}
+                    {tagIndex < post.tags.length - 1 ? <span>, </span> : null}
                   </>
                 ))}
               </div>
@@ -150,64 +168,6 @@ if (!post) {
     background: #fff;
   }
 
-  .event-detail {
-    padding: 12px 12px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .event-image {
-    width: 640px;
-    max-width: 100%;
-    height: auto;
-    object-fit: cover;
-    border: 1px solid #000;
-    display: block;
-  }
-
-  .event-image-empty {
-    min-height: 340px;
-    border: 1px solid #000;
-    background: transparent;
-  }
-
-  .event-meta {
-    width: min(100%, 760px);
-    padding-right: 56px;
-  }
-
-  .event-date {
-    margin: 0 0 8px;
-    font-size: 14px;
-    line-height: 1;
-  }
-
-  .event-title {
-    margin: 0 0 10px;
-    font-size: 24px;
-    line-height: 1.15;
-    font-weight: 400;
-    max-width: none;
-    word-break: normal;
-    overflow-wrap: normal;
-    hyphens: manual;
-  }
-
-  .event-subline {
-    margin: 0 0 12px;
-    font-size: 16px;
-    line-height: 1.2;
-    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  }
-
-  .event-body {
-    margin: 0;
-    font-size: 15.4px;
-    line-height: 1.28;
-    white-space: pre-line;
-  }
-
   .event-list-link {
     color: inherit;
     text-decoration: none;
@@ -215,31 +175,6 @@ if (!post) {
 
   .event-list-link:hover,
   .event-list-link.is-active {
-    text-decoration: underline;
-  }
-
-  .post-tags {
-    margin-top: 4px;
-  }
-
-  .post-tags .tagsText {
-    display: inline-block;
-    margin-top: 0;
-    padding: 8px 10px;
-    border: 1px solid #000;
-    background: #fff;
-  }
-
-  .tagsLinks {
-    display: block;
-  }
-
-  .tagLink {
-    color: #000;
-    text-decoration: none;
-  }
-
-  .tagLink:hover {
     text-decoration: underline;
   }
 </style>

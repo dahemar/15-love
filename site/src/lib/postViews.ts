@@ -172,28 +172,55 @@ export function getNewsPostViews(content: SiteContent): NewsPostView[] {
     });
 }
 
-export function getEventPostViews(content: SiteContent): EventPostView[] {
-  return sortArchiveEntries(content.archiveEntries)
-    .filter((entry) => entry.category === "events")
-    .map((entry) => {
-      const post = findEventPost(entry, content.eventPosts);
-      const details = post?.eventBlocks.find((block): block is EventDetailsBlock => block.__component === "events.details");
-      const imageBlock = post?.eventBlocks.find((block) => block.__component === "events.media" && !!block.image);
+function eventPostViewFromPost(post: EventPost, entry?: ArchiveEntry): EventPostView {
+  const details = post.eventBlocks.find((block): block is EventDetailsBlock => block.__component === "events.details");
+  const imageBlock = post.eventBlocks.find((block) => block.__component === "events.media" && !!block.image);
+  const publishedAt = entry?.publishedAt ?? post.publishedAt ?? "1970-01-01T00:00:00.000Z";
 
-      return {
-        id: entry.id,
-        legacyId: entry.legacyId,
-        title: post?.title || entry.title,
-        href: buildPostHref("events", entry.id),
-        publishedAt: entry.publishedAt,
-        dateLabel: details?.dateLabel || entry.dateLabel,
-        venue: details?.venue,
-        body: post ? eventBodyFromBlocks(post) : undefined,
-        image: imageBlock?.__component === "events.media" ? imageBlock.image : entry.thumbnail ? { url: entry.thumbnail.src, alt: entry.thumbnail.alt } : null,
-        eventBlocks: post?.eventBlocks?.length ? post.eventBlocks : fallbackEventBlocks(entry),
-        tags: entry.tags,
-      };
-    });
+  return {
+    id: post.id,
+    legacyId: post.legacyId,
+    title: post.title,
+    href: buildPostHref("events", post.id),
+    publishedAt,
+    dateLabel: details?.dateLabel || entry?.dateLabel || "",
+    venue: details?.venue,
+    body: eventBodyFromBlocks(post),
+    image: imageBlock?.__component === "events.media"
+      ? imageBlock.image
+      : entry?.thumbnail
+        ? { url: entry.thumbnail.src, alt: entry.thumbnail.alt }
+        : null,
+    eventBlocks: post.eventBlocks.length ? post.eventBlocks : entry ? fallbackEventBlocks(entry) : [],
+    tags: entry?.tags ?? [],
+  };
+}
+
+/** Static paths for every Strapi event post (source of truth for /events/:id). */
+export function getEventStaticPathParams(content: SiteContent): Array<{ id: string }> {
+  return content.eventPosts.flatMap((post) => {
+    const paths = [{ id: String(post.id) }];
+    if (post.legacyId && post.legacyId !== post.id) {
+      paths.push({ id: String(post.legacyId) });
+    }
+    return paths;
+  });
+}
+
+export function getEventPostViews(content: SiteContent): EventPostView[] {
+  const archiveById = new Map<string, ArchiveEntry>();
+  for (const entry of content.archiveEntries) {
+    if (entry.category !== "events") continue;
+    archiveById.set(entry.id, entry);
+    if (entry.legacyId) archiveById.set(entry.legacyId, entry);
+  }
+
+  return content.eventPosts
+    .map((post) => {
+      const entry = archiveById.get(post.id) ?? (post.legacyId ? archiveById.get(post.legacyId) : undefined);
+      return eventPostViewFromPost(post, entry);
+    })
+    .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
 }
 
 export function getReleasePostViews(content: SiteContent): ReleasePostView[] {
