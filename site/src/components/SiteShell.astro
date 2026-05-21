@@ -18,20 +18,24 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
 
 ---
 
-<div class="viewport" data-viewport>
-  <div class="stage" data-stage>
-    <div class="surface" data-surface>
-      <header class="header">
-        <div class="brand" aria-label="15 love">
-          <img class="brandLogo" src="/assets/15love_logo_1.svg" alt="15 love logo" width="180" height="72" />
-        </div>
+  <div class="viewport" data-viewport>
+    <div class="stage" data-stage>
+      <div class="surface" data-surface>
+        <header class="header">
+          <div class="brand" aria-label="15 love">
+            <img class="brandLogo" src="/assets/15love_logo_1.svg" alt="15 love logo" width="180" height="72" />
+          </div>
 
         <nav class="topnav" aria-label="Primary">
           <a class={"tab" + (activeTab === "home" ? " is-active" : "")} href="/home/" data-astro-prefetch="load">home</a><a class={"tab" + (activeTab === "news" ? " is-active" : "")} href="/news/" data-astro-prefetch="load">/news</a><a class={"tab" + (activeTab === "releases" ? " is-active" : "")} href="/releases/" data-astro-prefetch="load">/releases</a><a class={"tab" + (activeTab === "events" ? " is-active" : "")} href="/events/" data-astro-prefetch="load">/events</a><a class={"tab" + (activeTab === "about" ? " is-active" : "")} href="/about/" data-astro-prefetch="load">/about</a><a class={"tab" + (activeTab === "archive" ? " is-active" : "")} href="/archive/" data-astro-prefetch="load">/archive</a>
         </nav>
       </header>
 
-      <div class={"frame" + (activeTab === "news" || activeTab === "releases" || activeTab === "events" ? " is-news-layout" : "") + (activeTab === "archive" ? " is-archive-layout" : "")}>
+      <div class="page-background" aria-hidden="true">
+        <slot name="page-background" />
+      </div>
+
+      <div class={"frame" + (activeTab === "news" || activeTab === "releases" || activeTab === "events" ? " is-news-layout" : "") + (activeTab === "archive" ? " is-archive-layout" : "") + (activeTab === "about" ? " is-about-layout" : "")}>
         <aside class="col col-left">
           <slot name="left" />
         </aside>
@@ -154,22 +158,34 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
     display: none;
   }
 
+  .page-background {
+    position: absolute;
+    left: 0;
+    top: 140px;
+    width: 100%;
+    height: calc(1080px - 140px - 44px);
+    z-index: 0;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .page-background:empty {
+    display: none;
+  }
+
   .frame {
     position: absolute;
     left: 0;
     top: 140px;
     width: 100%;
     height: calc(1080px - 140px - 44px);
+    z-index: 1;
     display: grid;
-    /* Use flexible columns so they fill the full width and remain symmetric
-       around the center. Side columns equal, center wider (2.5x). */
-     grid-template-columns: 1fr 2.5fr 1fr;
+    grid-template-columns: 1fr 2.5fr 1fr;
     gap: 0;
-    padding: 16px 4px 0; /* minimal horizontal padding to hug edges */
+    padding: 16px 4px 0;
   }
 
-    /* Wide content pages keep the same left column dimensions as home while the
-      center column spans into the right column to create one horizontal panel. */
   .frame.is-news-layout .col-center {
     grid-column: 2 / 4;
     padding-left: 8px;
@@ -207,6 +223,27 @@ const tabs: Array<{ key: Tab; href: string; label: string }> = [
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+
+  .frame.is-about-layout {
+    grid-template-columns: 1fr;
+    padding: 16px 4px 0;
+  }
+
+  .frame.is-about-layout .col-left,
+  .frame.is-about-layout .col-right {
+    display: none;
+  }
+
+  .frame.is-about-layout .col-center {
+    grid-column: 1;
+    padding: 0;
+  }
+
+  .frame.is-about-layout .center-scroll {
+    border: none;
+    padding: 0;
+    overflow: hidden;
   }
 
   .col {

@@ -1,7 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
-import { getLocalThumbSrc } from "../lib/localAssetThumbs";
+import MobileShell from "../components/MobileShell.astro";
+import MobileEventsList from "../components/mobile/MobileEventsList.astro";
 import { getSiteContent } from "../lib/siteContent";
 import { getEventPostViews } from "../lib/postViews";
 
@@ -10,6 +11,7 @@ const cards = getEventPostViews(content);
 ---
 
 <BaseLayout title="15 love — Events">
+  <div class="layout-desktop">
   <SiteShell activeTab="events">
     <div slot="left" class="colblock colblock-left events-left">
       <section class="block block-events-list">
@@ -37,7 +39,7 @@ const cards = getEventPostViews(content);
                   {card.image ? (
                     <img
                       class="event-image"
-                      src={getLocalThumbSrc(card.image.url)}
+                      src={card.image.url}
                       alt={card.image.alt}
                       width="520"
                       height="340"
@@ -63,6 +65,13 @@ const cards = getEventPostViews(content);
       </section>
     </div>
   </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="events">
+      <MobileEventsList />
+    </MobileShell>
+  </div>
 </BaseLayout>
 
 <style>

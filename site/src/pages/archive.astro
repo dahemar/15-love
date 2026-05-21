@@ -1,8 +1,9 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
+import MobileShell from "../components/MobileShell.astro";
+import MobileArchive from "../components/mobile/MobileArchive.astro";
 import { getSiteContent } from "../lib/siteContent";
-import { getLocalThumbSrc } from "../lib/localAssetThumbs";
 import "../styles/archive.css";
 
 const content = await getSiteContent();
@@ -31,13 +32,14 @@ const renderedEntries = filteredEntries.map((entry) => ({
   thumbnail: entry.thumbnail
     ? {
         ...entry.thumbnail,
-        src: getLocalThumbSrc(entry.thumbnail.src),
+        src: entry.thumbnail.src,
       }
     : null,
 }));
 ---
 
 <BaseLayout title="15 love - Archive">
+  <div class="layout-desktop">
   <SiteShell activeTab="archive">
     <div slot="center" class="archive-wrap">
       <header class="archive-header">
@@ -173,4 +175,11 @@ const renderedEntries = filteredEntries.map((entry) => ({
       }
     })();
   </script>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="archive">
+      <MobileArchive />
+    </MobileShell>
+  </div>
 </BaseLayout>

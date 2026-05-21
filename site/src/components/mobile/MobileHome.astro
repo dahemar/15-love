@@ -1,0 +1,82 @@
+---
+import { getSiteContent } from "../../lib/siteContent";
+import { getEventPostViews, getNewsPostViews, getReleasePostViews } from "../../lib/postViews";
+
+const content = await getSiteContent();
+const feed = content.homeFeedPosts.slice(0, 8);
+const releaseViews = getReleasePostViews(content);
+const eventViews = getEventPostViews(content);
+const newsViews = getNewsPostViews(content);
+
+const releaseByKey = new Map<string, (typeof releaseViews)[number]>();
+for (const post of releaseViews) {
+  releaseByKey.set(post.id, post);
+  if (post.legacyId) releaseByKey.set(post.legacyId, post);
+}
+
+const eventByKey = new Map<string, (typeof eventViews)[number]>();
+for (const post of eventViews) {
+  eventByKey.set(post.id, post);
+  if (post.legacyId) eventByKey.set(post.legacyId, post);
+}
+
+const newsByKey = new Map<string, (typeof newsViews)[number]>();
+for (const post of newsViews) {
+  newsByKey.set(post.id, post);
+  if (post.legacyId) newsByKey.set(post.legacyId, post);
+}
+---
+
+<section class="m-frame" aria-label="Recent posts">
+  <div class="m-feed">
+    {feed.map((post, index) => {
+      const release = post.category === "releases" ? releaseByKey.get(post.id) : undefined;
+      const event = post.category === "events" ? eventByKey.get(post.id) : undefined;
+      let image = post.image;
+      if (!image?.src && release?.image?.src) {
+        image = { src: release.image.src, alt: release.image.alt };
+      } else if (!image?.src && event?.image?.url) {
+        image = { src: event.image.url, alt: event.image.alt };
+      } else if (!image?.src && newsByKey.get(post.id)?.thumbnail?.src) {
+        image = newsByKey.get(post.id)!.thumbnail;
+      }
+
+      return (
+        <article class={`m-feed-block is-${post.category}`}>
+          <header class="m-feed-head">
+            <span class={`m-feed-pill is-${post.category}`}>{post.category}</span>
+          </header>
+          <a class="m-feed-link m-post-card" href={post.href} data-astro-prefetch="hover">
+            {image?.src ? (
+              <img
+                class="m-post-media"
+                src={image.src}
+                alt={image.alt}
+                width="720"
+                height="720"
+                loading={index < 2 ? "eager" : "lazy"}
+                decoding="async"
+                fetchpriority={index < 2 ? "high" : undefined}
+              />
+            ) : null}
+
+            <h3 class="m-post-title">{post.title}</h3>
+
+            {release?.credits.length ? (
+              <div class="m-post-credits" aria-label="Release information">
+                {release.credits.map((credit) => (
+                  <p>
+                    <span class="m-feed-credit-label">{credit.label}</span> {credit.value}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+
+            {event?.venue ? <p class="m-item-meta">{event.venue}</p> : null}
+            {post.excerpt ? <p class="m-post-body">{post.excerpt}</p> : null}
+          </a>
+        </article>
+      );
+    })}
+  </div>
+</section>

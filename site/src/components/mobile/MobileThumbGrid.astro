@@ -1,0 +1,36 @@
+---
+type ThumbItem = {
+  href: string;
+  thumbnail: { src: string; alt: string } | null;
+};
+
+type Props = {
+  items: ThumbItem[];
+};
+
+const { items } = Astro.props;
+---
+
+<section class="m-panel">
+  <ul class="m-thumb-grid">
+    {items.map((item, index) => (
+      <li class="m-thumb-cell">
+        <a href={item.href} data-astro-prefetch="hover" title={item.thumbnail?.alt}>
+          {item.thumbnail?.src ? (
+            <img
+              src={item.thumbnail.src}
+              alt={item.thumbnail.alt}
+              width="320"
+              height="320"
+              loading={index < 9 ? "eager" : "lazy"}
+              decoding="async"
+              fetchpriority={index < 9 ? "high" : undefined}
+            />
+          ) : (
+            <span class="m-thumb-empty" aria-hidden="true"></span>
+          )}
+        </a>
+      </li>
+    ))}
+  </ul>
+</section>

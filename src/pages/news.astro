@@ -3,6 +3,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
 import { getSiteContent } from "../lib/siteContent";
 import { getLocalThumbSrc } from "../lib/localAssetThumbs";
+import { newsImageDimensions } from "../lib/newsImageWidth";
 import { getNewsPostViews } from "../lib/postViews";
 
 const content = await getSiteContent();
@@ -32,12 +33,6 @@ function plainTextToHtml(value: string): string {
 function renderNewsBody(value?: string): string {
   if (!value) return "";
   return isHtmlLike(value) ? value : plainTextToHtml(value);
-}
-
-function mediaDimensions(size: "narrow" | "medium" | "wide") {
-  if (size === "narrow") return { width: 190, height: 190 };
-  if (size === "wide") return { width: 460, height: 320 };
-  return { width: 320, height: 260 };
 }
 
 ---
@@ -83,7 +78,7 @@ function mediaDimensions(size: "narrow" | "medium" | "wide") {
 
                   if (!block.image) return null;
                   const size = block.imageWidth ?? "medium";
-                  const fallback = mediaDimensions(size);
+                  const fallback = newsImageDimensions(size);
                   const width = block.image.width ?? fallback.width;
                   const height = block.image.height ?? fallback.height;
 
@@ -361,6 +356,10 @@ function mediaDimensions(size: "narrow" | "medium" | "wide") {
     max-width: 636px;
   }
 
+  .news-media.is-xs {
+    width: 140px;
+  }
+
   .news-media.is-narrow {
     width: 220px;
   }
@@ -371,6 +370,14 @@ function mediaDimensions(size: "narrow" | "medium" | "wide") {
 
   .news-media.is-wide {
     width: 460px;
+  }
+
+  .news-media.is-xl {
+    width: 540px;
+  }
+
+  .news-media.is-max {
+    width: 636px;
   }
 
   .news-image {

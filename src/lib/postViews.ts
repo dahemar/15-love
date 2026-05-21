@@ -49,6 +49,7 @@ export type ReleasePostView = {
   image: { src: string; alt: string } | null;
   credits: ReleaseCard["credits"];
   body: string;
+  links: ReleaseCard["links"];
   summary?: string;
   tags: string[];
 };
@@ -86,7 +87,7 @@ function fallbackNewsBlocks(entry: ArchiveEntry): NewsBlock[] {
 
   return [
     {
-      __component: "news.media",
+      __component: "media",
       id: 1,
       image: {
         url: entry.thumbnail.src,
@@ -196,6 +197,7 @@ export function getReleasePostViews(content: SiteContent): ReleasePostView[] {
         image: card?.image ?? entry.thumbnail,
         credits: card?.credits ?? [],
         body: card?.body ?? "",
+        links: card?.links ?? [],
         summary: card?.summary,
         tags: entry.tags,
       };

@@ -1,8 +1,9 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
+import MobileShell from "../components/MobileShell.astro";
+import MobileNewsList from "../components/mobile/MobileNewsList.astro";
 import { getSiteContent } from "../lib/siteContent";
-import { getLocalThumbSrc } from "../lib/localAssetThumbs";
 import { newsImageDimensions } from "../lib/newsImageWidth";
 import { getNewsPostViews } from "../lib/postViews";
 
@@ -38,6 +39,7 @@ function renderNewsBody(value?: string): string {
 ---
 
 <BaseLayout title="15 love — News">
+  <div class="layout-desktop">
   <SiteShell activeTab="news">
     <div slot="left" class="colblock colblock-left news-left">
       <section class="block block-news">
@@ -61,7 +63,7 @@ function renderNewsBody(value?: string): string {
           <div class="news-stream-frame">
             <div class="news-stream">
             {newsPosts.map((post, postIndex) => (
-              <article class="news-entry" data-entry-id={post.id}>
+              <article class="news-entry" id={post.id}>
                 <div class="news-entry-start">
                   <header class="news-entry-header">
                     <h3 class="news-entry-title">
@@ -86,7 +88,7 @@ function renderNewsBody(value?: string): string {
                     <figure class={`news-block news-media is-${block.imagePosition} is-${size}`}>
                       <img
                         class="news-image"
-                        src={getLocalThumbSrc(block.image.url)}
+                        src={block.image.url}
                         alt={block.image.alt}
                         width={width}
                         height={height}
@@ -108,6 +110,13 @@ function renderNewsBody(value?: string): string {
       </section>
     </div>
   </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="news">
+      <MobileNewsList />
+    </MobileShell>
+  </div>
 </BaseLayout>
 
 <script is:inline>
@@ -145,58 +154,64 @@ function renderNewsBody(value?: string): string {
     };
 
     const markColumnFlow = (colWidth) => {
-      const getColumnIndex = (element, streamRect) => {
+      const streamRect = stream.getBoundingClientRect();
+      const streamWidth = stream.scrollWidth || stream.offsetWidth;
+      const columnCount = Math.max(1, Math.round((streamWidth + 1) / (colWidth + 1)));
+      const columnStep =
+        columnCount > 1 ? (streamWidth - colWidth) / (columnCount - 1) : colWidth;
+      const TOP_EPS = 2;
+
+      const getColumnIndex = (element) => {
         const rect = element.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return null;
-        return Math.round((rect.left - streamRect.left) / (colWidth + 1));
+        return Math.round((rect.left - streamRect.left) / columnStep);
+      };
+
+      const fragments = stream.querySelectorAll(".news-entry-start, .news-entry-body");
+      const columnTops = new Map();
+
+      fragments.forEach((fragment) => {
+        const col = getColumnIndex(fragment);
+        if (col == null) return;
+        const top = fragment.getBoundingClientRect().top;
+        const prev = columnTops.get(col);
+        if (prev == null || top < prev) columnTops.set(col, top);
+      });
+
+      const isAtColumnTop = (element) => {
+        const col = getColumnIndex(element);
+        if (col == null) return false;
+        const columnTop = columnTops.get(col);
+        if (columnTop == null) return false;
+        return Math.abs(element.getBoundingClientRect().top - columnTop) <= TOP_EPS;
       };
 
       const entries = stream.querySelectorAll(".news-entry");
-      const streamRect = stream.getBoundingClientRect();
 
-      // Clean up
       entries.forEach((entry) => {
         const body = entry.querySelector(".news-entry-body");
-        if (body) {
-          body.classList.remove("is-column-continue");
-          body.classList.remove("is-column-end");
-        }
         const start = entry.querySelector(".news-entry-start");
-        if (start) {
-          start.classList.remove("is-column-start");
-        }
+        if (body) body.classList.remove("is-column-continue");
+        if (start) start.classList.remove("is-column-start");
       });
 
-      // Mark split posts: body in a later column than its start
       entries.forEach((entry) => {
         const start = entry.querySelector(".news-entry-start");
         const body = entry.querySelector(".news-entry-body");
         if (!start || !body) return;
 
-        const startCol = getColumnIndex(start, streamRect);
-        const bodyCol = getColumnIndex(body, streamRect);
+        const startCol = getColumnIndex(start);
+        const bodyCol = getColumnIndex(body);
         if (startCol == null || bodyCol == null) return;
 
         if (bodyCol > startCol) {
           body.classList.add("is-column-continue");
         }
-      });
 
-      // Hide border of the first entry in each column
-      const firstByCol = new Map();
-      entries.forEach((entry) => {
-        const start = entry.querySelector(".news-entry-start");
-        if (!start) return;
-        const col = getColumnIndex(start, streamRect);
-        if (col == null) return;
-        const top = start.getBoundingClientRect().top;
-        const prev = firstByCol.get(col);
-        if (!prev || top < prev.top) {
-          firstByCol.set(col, start);
+        // Only hide the separator when the title truly sits at the column top.
+        if (isAtColumnTop(start)) {
+          start.classList.add("is-column-start");
         }
-      });
-      firstByCol.forEach((start) => {
-        start.classList.add("is-column-start");
       });
     };
 
@@ -270,10 +285,7 @@ function renderNewsBody(value?: string): string {
   }
 
   .news-entry {
-    display: block;
-    width: 100%;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    display: contents;
   }
 
   .news-entry-start {
@@ -287,13 +299,27 @@ function renderNewsBody(value?: string): string {
   .news-entry-body {
     display: block;
     width: 100%;
-    padding: 16px var(--news-column-padding-x) 0;
+    padding: 0 var(--news-column-padding-x);
     margin: 0;
     box-sizing: border-box;
   }
 
+  .news-entry-body::after {
+    content: "";
+    display: block;
+    clear: both;
+  }
+
+  .news-entry-body.is-column-continue {
+    padding-top: 12px;
+  }
+
   .news-entry-start {
     border-top: 1px solid #000;
+  }
+
+  .news-entry-start.is-column-start {
+    border-top: none;
   }
 
   .news-entry-link,
@@ -413,3 +439,4 @@ function renderNewsBody(value?: string): string {
     }
   }
 </style>
+ha

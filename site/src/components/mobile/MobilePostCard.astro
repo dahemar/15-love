@@ -1,0 +1,68 @@
+---
+type Credit = { label: string; value: string };
+
+type Props = {
+  href: string;
+  title: string;
+  excerpt?: string;
+  dateLabel?: string;
+  image?: { src: string; alt: string } | null;
+  credits?: Credit[];
+  meta?: string;
+  eager?: boolean;
+  class?: string;
+  "data-type"?: string;
+  "data-tags"?: string;
+  "data-date"?: string;
+};
+
+const {
+  href,
+  title,
+  excerpt,
+  dateLabel,
+  image,
+  credits = [],
+  meta,
+  eager = false,
+  class: extraClass,
+  "data-type": dataType,
+  "data-tags": dataTags,
+  "data-date": dataDate,
+} = Astro.props;
+---
+
+<li
+  class:list={["m-item", extraClass]}
+  data-type={dataType}
+  data-tags={dataTags}
+  data-date={dataDate}
+>
+  <a class="m-item-link m-post-card" href={href} data-astro-prefetch="hover">
+    {dateLabel ? <p class="m-item-kicker">{dateLabel}</p> : null}
+    {image?.src ? (
+      <img
+        class="m-post-media"
+        src={image.src}
+        alt={image.alt}
+        width="720"
+        height="720"
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+        fetchpriority={eager ? "high" : undefined}
+      />
+    ) : null}
+    <h2 class="m-post-title">{title}</h2>
+    {credits.length ? (
+      <div class="m-post-credits" aria-label="Release information">
+        {credits.map((credit) => (
+          <p>
+            <span class="m-feed-credit-label">{credit.label}</span> {credit.value}
+          </p>
+        ))}
+      </div>
+    ) : null}
+    {meta ? <p class="m-item-meta">{meta}</p> : null}
+    {excerpt ? <p class="m-post-body">{excerpt}</p> : null}
+  </a>
+</li>

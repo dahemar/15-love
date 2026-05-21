@@ -49,6 +49,7 @@ export type ReleasePostView = {
   image: { src: string; alt: string } | null;
   credits: ReleaseCard["credits"];
   body: string;
+  links: ReleaseCard["links"];
   summary?: string;
   tags: string[];
 };
@@ -86,7 +87,7 @@ function fallbackNewsBlocks(entry: ArchiveEntry): NewsBlock[] {
 
   return [
     {
-      __component: "news.media",
+      __component: "media",
       id: 1,
       image: {
         url: entry.thumbnail.src,
@@ -116,6 +117,7 @@ function fallbackEventBlocks(entry: ArchiveEntry): EventBlock[] {
         alt: entry.thumbnail.alt,
       },
       imagePosition: "left",
+      imageWidth: "medium",
     });
   }
 
@@ -135,6 +137,20 @@ function eventBodyFromBlocks(post: EventPost): string | undefined {
   return details?.description || post.body;
 }
 
+function newsListThumbnail(post: NewsPost | undefined, entry: ArchiveEntry): ArchiveEntry["thumbnail"] {
+  if (entry.thumbnail?.src?.trim()) return entry.thumbnail;
+
+  const media = post?.newsBlocks.find(
+    (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "media" }> =>
+      block.__component === "media" && !!block.image?.url,
+  );
+  if (media?.image?.url) {
+    return { src: media.image.url, alt: media.image.alt };
+  }
+
+  return entry.thumbnail;
+}
+
 export function getNewsPostViews(content: SiteContent): NewsPostView[] {
   return sortArchiveEntries(content.archiveEntries)
     .filter((entry) => entry.category === "news")
@@ -149,7 +165,7 @@ export function getNewsPostViews(content: SiteContent): NewsPostView[] {
         publishedAt: entry.publishedAt,
         dateLabel: entry.dateLabel,
         summary: post?.summary,
-        thumbnail: entry.thumbnail,
+        thumbnail: newsListThumbnail(post, entry),
         newsBlocks: post?.newsBlocks?.length ? post.newsBlocks : fallbackNewsBlocks(entry),
         tags: entry.tags,
       };
@@ -193,9 +209,10 @@ export function getReleasePostViews(content: SiteContent): ReleasePostView[] {
         href: buildPostHref("releases", entry.id),
         publishedAt: entry.publishedAt,
         dateLabel: entry.dateLabel,
-        image: card?.image ?? entry.thumbnail,
+        image: card?.image?.src?.trim() ? card.image : entry.thumbnail,
         credits: card?.credits ?? [],
         body: card?.body ?? "",
+        links: card?.links ?? [],
         summary: card?.summary,
         tags: entry.tags,
       };

@@ -1,7 +1,8 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteShell from "../../components/SiteShell.astro";
-import { getLocalThumbSrc } from "../../lib/localAssetThumbs";
+import MobileShell from "../../components/MobileShell.astro";
+import MobileNewsDetail from "../../components/mobile/MobileNewsDetail.astro";
 import { newsImageDimensions } from "../../lib/newsImageWidth";
 import { getSiteContent } from "../../lib/siteContent";
 import { getNewsPostViews } from "../../lib/postViews";
@@ -53,6 +54,7 @@ if (!post) {
 ---
 
 <BaseLayout title={`15 love — ${post.title}`}>
+  <div class="layout-desktop">
   <SiteShell activeTab="news">
     <div slot="left" class="colblock colblock-left news-left">
       <section class="block block-news">
@@ -101,7 +103,7 @@ if (!post) {
               <figure class={`news-block news-media is-${block.imagePosition} is-${size}`}>
                 <img
                   class="news-image"
-                  src={getLocalThumbSrc(block.image.url)}
+                  src={block.image.url}
                   alt={block.image.alt}
                   width={width}
                   height={height}
@@ -129,6 +131,13 @@ if (!post) {
       </section>
     </div>
   </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="news">
+      <MobileNewsDetail post={post} />
+    </MobileShell>
+  </div>
 </BaseLayout>
 
 <style>

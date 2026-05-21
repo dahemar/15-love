@@ -1,0 +1,176 @@
+---
+import { getSiteContent } from "../../lib/siteContent";
+import {
+  getEventPostViews,
+  getNewsPostViews,
+  getReleasePostViews,
+  type EventPostView,
+  type NewsPostView,
+  type ReleasePostView,
+} from "../../lib/postViews";
+import { clampText } from "../../lib/mobileExcerpt";
+import MobilePostCard from "./MobilePostCard.astro";
+
+const content = await getSiteContent();
+const entries = content.archiveEntries;
+const tagOptions = Array.from(new Set(entries.flatMap((entry) => entry.tags))).sort((left, right) => left.localeCompare(right));
+const dateOptions = Array.from(new Set(entries.map((entry) => entry.dateLabel).filter(Boolean)));
+
+const newsById = new Map(getNewsPostViews(content).map((post) => [post.id, post]));
+const eventsById = new Map(getEventPostViews(content).map((post) => [post.id, post]));
+const releasesById = new Map(getReleasePostViews(content).map((post) => [post.id, post]));
+
+function newsExcerpt(post: NewsPostView): string {
+  if (post.summary?.trim()) return clampText(post.summary);
+  const rich = post.newsBlocks.find((block) => block.__component === "news.rich-text" && block.body);
+  if (rich?.__component === "news.rich-text" && rich.body) return clampText(rich.body);
+  return "";
+}
+
+function eventExcerpt(post: EventPostView): string {
+  if (post.body?.trim()) return clampText(post.body);
+  return "";
+}
+
+function releaseExcerpt(post: ReleasePostView): string {
+  if (post.summary?.trim()) return clampText(post.summary);
+  if (post.body?.trim()) return clampText(post.body);
+  return "";
+}
+---
+
+<section class="m-panel m-archive">
+  <header class="m-archive-filters">
+    <label>
+      <span class="sr-only">Filter by type</span>
+      <select class="m-filter" data-filter-kind="type">
+        <option value="all">type</option>
+        <option value="news">news</option>
+        <option value="events">events</option>
+        <option value="releases">releases</option>
+      </select>
+    </label>
+    <label>
+      <span class="sr-only">Filter by tag</span>
+      <select class="m-filter" data-filter-kind="tag">
+        <option value="all">tag</option>
+        {tagOptions.map((tag) => (
+          <option value={tag}>{tag}</option>
+        ))}
+      </select>
+    </label>
+    <label>
+      <span class="sr-only">Filter by date</span>
+      <select class="m-filter" data-filter-kind="date">
+        <option value="all">date</option>
+        {dateOptions.map((dateLabel) => (
+          <option value={dateLabel}>{dateLabel}</option>
+        ))}
+      </select>
+    </label>
+  </header>
+
+  <ul class="m-list m-archive-list">
+    {entries.map((entry, index) => {
+      const news = entry.category === "news" ? newsById.get(entry.id) : undefined;
+      const event = entry.category === "events" ? eventsById.get(entry.id) : undefined;
+      const release = entry.category === "releases" ? releasesById.get(entry.id) : undefined;
+
+      let image = entry.thumbnail;
+      if (event?.image?.url) {
+        image = { src: event.image.url, alt: event.image.alt };
+      } else if (release?.image?.src?.trim()) {
+        image = { src: release.image.src, alt: release.image.alt };
+      } else if (news?.thumbnail) {
+        image = news.thumbnail;
+      }
+
+      const excerpt =
+        entry.category === "news" && news
+          ? newsExcerpt(news)
+          : entry.category === "events" && event
+            ? eventExcerpt(event)
+            : entry.category === "releases" && release
+              ? releaseExcerpt(release)
+              : "";
+
+      const meta =
+        entry.category === "events" && event
+          ? [event.venue, event.dateLabel].filter(Boolean).join(" — ")
+          : undefined;
+
+      return (
+        <MobilePostCard
+          class="m-archive-item"
+          data-type={entry.category}
+          data-tags={entry.tags.join("|")}
+          data-date={entry.dateLabel}
+          href={entry.href}
+          title={entry.title}
+          dateLabel={entry.dateLabel}
+          image={image}
+          credits={release?.credits}
+          meta={meta}
+          excerpt={excerpt}
+          eager={index < 2}
+        />
+      );
+    })}
+  </ul>
+</section>
+
+<script is:inline>
+  (() => {
+    const filters = document.querySelectorAll(".m-archive .m-filter");
+    const items = document.querySelectorAll(".m-archive-item");
+    if (!filters.length || !items.length) return;
+
+    const state = { type: "all", tag: "all", date: "all" };
+    const readFilters = () => {
+      filters.forEach((select) => {
+        const kind = select.getAttribute("data-filter-kind");
+        if (!kind || !(kind in state)) return;
+        state[kind] = select.value;
+      });
+    };
+
+    const apply = () => {
+      items.forEach((item) => {
+        let visible = true;
+        if (state.type !== "all" && item.getAttribute("data-type") !== state.type) visible = false;
+        if (state.tag !== "all") {
+          const tags = (item.getAttribute("data-tags") || "").split("|");
+          if (!tags.includes(state.tag)) visible = false;
+        }
+        if (state.date !== "all" && item.getAttribute("data-date") !== state.date) visible = false;
+        item.style.display = visible ? "" : "none";
+      });
+    };
+
+    filters.forEach((select) => {
+      select.addEventListener("change", () => {
+        readFilters();
+        apply();
+      });
+    });
+  })();
+</script>
+
+<style>
+  .m-archive-filters {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 10px;
+    border-bottom: 1px solid #000;
+  }
+
+  .m-filter {
+    width: 100%;
+    border: 1px solid #000;
+    background: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    min-height: 30px;
+  }
+</style>

@@ -1,0 +1,80 @@
+---
+import { renderRichBody } from "../../lib/html";
+import type { ReleasePostView } from "../../lib/postViews";
+import MobileDetailTop from "./MobileDetailTop.astro";
+
+type Props = {
+  post: ReleasePostView;
+};
+
+const { post } = Astro.props;
+---
+
+<article class="m-detail">
+  <MobileDetailTop backHref="/releases/" backLabel="Back to releases" tags={post.tags} />
+  <p class="m-detail-date">{post.dateLabel}</p>
+  <h1>{post.title}</h1>
+  {post.image?.src ? (
+    <img
+      class="m-release-image"
+      src={post.image.src}
+      alt={post.image.alt}
+      width="720"
+      height="720"
+      loading="eager"
+      decoding="async"
+      fetchpriority="high"
+    />
+  ) : null}
+
+  {post.credits.length ? (
+    <div class="m-release-credits">
+      {post.credits.map((credit) => (
+        <p>
+          <span class="m-feed-credit-label">{credit.label}</span> {credit.value}
+        </p>
+      ))}
+    </div>
+  ) : null}
+
+  {post.body ? <div class="m-release-body" set:html={renderRichBody(post.body)} /> : null}
+
+  {post.links.length ? (
+    <nav class="m-release-links">
+      {post.links.map((link, index) => (
+        <>
+          <a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a>
+          {index < post.links.length - 1 ? <span>, </span> : null}
+        </>
+      ))}
+    </nav>
+  ) : null}
+</article>
+
+<style>
+  .m-release-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #000;
+    margin-bottom: 12px;
+  }
+
+  .m-release-credits p {
+    margin: 0 0 2px;
+    line-height: 1.25;
+  }
+
+  .m-release-body :global(p) {
+    margin: 0 0 0.75em;
+  }
+
+  .m-release-links {
+    margin-top: 12px;
+    font-size: var(--m-type-body);
+  }
+
+  .m-release-links a {
+    color: #000;
+  }
+</style>

@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
+import MobileShell from "../components/MobileShell.astro";
+import MobileHome from "../components/mobile/MobileHome.astro";
 import TennisButton from "../components/TennisButton.astro";
 import PostFeed from "../components/PostFeed.astro";
 import { getSiteContent } from "../lib/siteContent";
@@ -17,6 +19,7 @@ const homeDates = Array.from(new Set(content.archiveEntries.map((entry) => entry
 ---
 
 <BaseLayout title="15 love — Home">
+  <div class="layout-desktop">
   <SiteShell activeTab="home">
     <div slot="left" class="colblock colblock-left">
       <section class="block block-news">
@@ -82,6 +85,13 @@ const homeDates = Array.from(new Set(content.archiveEntries.map((entry) => entry
       </section>
     </div>
   </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="home">
+      <MobileHome />
+    </MobileShell>
+  </div>
 </BaseLayout>
 
 <style>

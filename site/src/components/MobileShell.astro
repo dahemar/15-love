@@ -1,0 +1,49 @@
+---
+import "../styles/mobile.css";
+
+type Tab = "home" | "news" | "releases" | "events" | "about" | "archive";
+
+type Props = {
+  activeTab: Tab;
+};
+
+const { activeTab } = Astro.props;
+
+const tabs: Array<{ key: Tab; href: string; label: string }> = [
+  { key: "home", href: "/home/", label: "home" },
+  { key: "news", href: "/news/", label: "news" },
+  { key: "releases", href: "/releases/", label: "releases" },
+  { key: "events", href: "/events/", label: "events" },
+  { key: "about", href: "/about/", label: "about" },
+  { key: "archive", href: "/archive/", label: "archive" },
+];
+---
+
+<div class="m-shell">
+  <div class="m-shell-sticky">
+    <header class="m-header">
+      <a class="m-logo-link" href="/" aria-label="15 love" data-astro-prefetch="load">
+        <img class="m-logo" src="/assets/15love_logo_1.svg" alt="15 love logo" width="122" height="48" />
+      </a>
+    </header>
+
+    <nav class="m-nav" aria-label="Primary">
+      {tabs.map((tab, index) => (
+        <>
+          {index > 0 ? <span class="m-nav-sep" aria-hidden="true">/</span> : null}
+          <a
+            class={`m-nav-link${activeTab === tab.key ? " is-active" : ""}`}
+            href={tab.href}
+            data-astro-prefetch="load"
+          >
+            {tab.label}
+          </a>
+        </>
+      ))}
+    </nav>
+  </div>
+
+  <main class="m-main">
+    <slot />
+  </main>
+</div>

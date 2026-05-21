@@ -1,0 +1,30 @@
+---
+type Props = {
+  backHref: string;
+  backLabel: string;
+  tags?: string[];
+};
+
+const { backHref, backLabel, tags = [] } = Astro.props;
+---
+
+<div class="m-detail-top">
+  <a
+    class="m-back"
+    href={backHref}
+    aria-label={backLabel}
+    onclick={`if (window.history.length > 1) { window.history.back(); return false; }`}
+  >
+    <span aria-hidden="true">←</span>
+  </a>
+
+  {tags.length ? (
+    <div class="m-detail-tags" aria-label="Tags">
+      {tags.map((tag) => (
+        <a class="m-tag-pill" href={`/archive/?tag=${encodeURIComponent(tag)}`} data-astro-prefetch="hover">
+          {tag}
+        </a>
+      ))}
+    </div>
+  ) : null}
+</div>

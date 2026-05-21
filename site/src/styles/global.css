@@ -183,3 +183,55 @@ body {
   right: 12px;
   bottom: 12px;
 }
+
+/* If a desktop page loads on a phone before redirect, avoid 1920px canvas scaling */
+@media (max-width: 900px) {
+  .viewport {
+    width: 100%;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    display: block;
+  }
+
+  .stage {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .surface {
+    width: 100% !important;
+    height: auto !important;
+    transform: none !important;
+    overflow: visible;
+  }
+
+  .header,
+  .frame,
+  .footer,
+  .page-background {
+    position: static;
+    width: 100%;
+    height: auto;
+  }
+
+  .frame {
+    display: block;
+    padding: 12px;
+  }
+
+  .col-left,
+  .col-right {
+    display: none;
+  }
+
+  .col-center {
+    padding: 0;
+  }
+
+  .center-scroll {
+    height: auto;
+    overflow: visible;
+    border: 1px solid #000;
+  }
+}

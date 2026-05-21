@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteShell from "../../components/SiteShell.astro";
+import MobileShell from "../../components/MobileShell.astro";
+import MobileEventDetail from "../../components/mobile/MobileEventDetail.astro";
 import { getSiteContent } from "../../lib/siteContent";
 import { getEventPostViews } from "../../lib/postViews";
 
@@ -26,6 +28,7 @@ if (!post) {
 ---
 
 <BaseLayout title={`15 love — ${post.title}`}>
+  <div class="layout-desktop">
   <SiteShell activeTab="events">
     <div slot="left" class="colblock colblock-left events-left">
       <section class="block block-events-list">
@@ -91,6 +94,13 @@ if (!post) {
       </section>
     </div>
   </SiteShell>
+  </div>
+
+  <div class="layout-mobile">
+    <MobileShell activeTab="events">
+      <MobileEventDetail post={post} />
+    </MobileShell>
+  </div>
 </BaseLayout>
 
 <style>

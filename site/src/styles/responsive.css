@@ -1,0 +1,14 @@
+/* Same URL: show desktop or mobile layout by viewport */
+.layout-mobile {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .layout-desktop {
+    display: none !important;
+  }
+
+  .layout-mobile {
+    display: block;
+  }
+}

@@ -1,6 +1,15 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
   "env": {
-    "CMS_MODE": "strapi",
     "STRAPI_URL": "https://strapi-client-15-love.onrender.com"
-  }
+  },
+  "redirects": [
+    { "source": "/m", "destination": "/", "permanent": false },
+    { "source": "/m/", "destination": "/", "permanent": false },
+    { "source": "/m/home", "destination": "/home", "permanent": false },
+    { "source": "/m/home/", "destination": "/home/", "permanent": false },
+    { "source": "/m/:path*", "destination": "/:path*", "permanent": false }
+  ]
 }

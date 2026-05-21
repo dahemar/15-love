@@ -1,9 +1,11 @@
-import { localSiteContent, type SiteContent } from "../data/siteContent";
-import { isDeployBuild, resolveCmsMode, resolveStrapiToken, resolveStrapiUrl } from "./cmsConfig";
-import { getLocalThumbSrc } from "./localAssetThumbs";
+import type { SiteContent } from "../data/siteContent";
+import { resolveStrapiToken, resolveStrapiUrl } from "./cmsConfig";
+import { normalizeNewsImageWidth } from "./newsImageWidth";
 import { buildPostHref } from "./postRoutes";
 
-const CMS_MODE = resolveCmsMode();
+export { normalizeNewsImageWidth } from "./newsImageWidth";
+export type { NewsImageWidth } from "./newsImageWidth";
+
 const STRAPI_URL = resolveStrapiUrl();
 const STRAPI_TOKEN = resolveStrapiToken();
 const STRAPI_CACHE_TTL_MS = Number(import.meta.env.STRAPI_CACHE_TTL_MS ?? (import.meta.env.DEV ? "0" : "60000"));
@@ -32,7 +34,10 @@ function refreshStrapiContentInBackground() {
   inFlightStrapiContentRequest = refreshStrapiContent()
     .catch((error) => {
       console.warn("[15love] Background refresh from Strapi failed:", error instanceof Error ? error.message : String(error));
-      return cachedStrapiContent ?? withDerivedContent(localSiteContent);
+      if (!cachedStrapiContent) {
+        throw error;
+      }
+      return cachedStrapiContent;
     })
     .finally(() => {
       inFlightStrapiContentRequest = null;
@@ -134,11 +139,6 @@ function normalizeNewsImagePosition(value: unknown): "left" | "right" | "center"
   return "left";
 }
 
-function normalizeNewsImageWidth(value: unknown): "narrow" | "medium" | "wide" {
-  if (value === "narrow" || value === "wide") return value;
-  return "medium";
-}
-
 function normalizeNewsImageParagraph(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
   if (typeof value === "string" && value.trim().length > 0) {
@@ -176,6 +176,10 @@ function splitNewsSectionBody(value: string): string[] {
     .filter(Boolean);
 }
 
+function isNewsMediaComponent(value: unknown): boolean {
+  return value === "media" || value === "news.media";
+}
+
 function pushNewsMediaBlock(
   parsedBlocks: NewsPost["newsBlocks"],
   image: { src: string; alt: string; width?: number; height?: number },
@@ -188,7 +192,7 @@ function pushNewsMediaBlock(
   },
 ) {
   const block: NewsPost["newsBlocks"][number] = {
-    __component: "news.media",
+    __component: "media",
     id: typeof options.id === "number" ? options.id : parsedBlocks.length + 1,
     image: {
       url: image.src,
@@ -230,6 +234,7 @@ type ParsedNewsSectionFields = {
   imageParagraph?: unknown;
 };
 
+/** Legacy Strapi `news.section` → rich-text + `media` blocks (with imageWidth). */
 function pushNewsSectionBlocks(
   parsedBlocks: NewsPost["newsBlocks"],
   fields: ParsedNewsSectionFields,
@@ -250,6 +255,7 @@ function pushNewsSectionBlocks(
           caption: fields.caption,
           imagePosition: fields.imagePosition,
           imageWidth: fields.imageWidth,
+          imageParagraph: fields.imageParagraph,
         });
       }
 
@@ -263,13 +269,14 @@ function pushNewsSectionBlocks(
       caption: fields.caption,
       imagePosition: fields.imagePosition,
       imageWidth: fields.imageWidth,
+      imageParagraph: fields.imageParagraph,
     });
   }
   if (body) pushNewsRichTextBlock(parsedBlocks, body, fields.id);
 }
 
 type NewsRichTextBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "news.rich-text" }>;
-type NewsMediaBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "news.media" }>;
+type NewsMediaBlockParsed = Extract<NewsPost["newsBlocks"][number], { __component: "media" }>;
 
 function pushNewsMediaFromBlock(parsedBlocks: NewsPost["newsBlocks"], media: NewsMediaBlockParsed) {
   if (!media.image) return;
@@ -291,14 +298,14 @@ function pushNewsMediaFromBlock(parsedBlocks: NewsPost["newsBlocks"], media: New
   );
 }
 
-/** body + one or more media blocks → interleave like news.section (images float in text flow). */
+/** body + one or more media blocks → interleave images in text flow. */
 function coalesceBodyWithMediaBlocks(parsedBlocks: NewsPost["newsBlocks"]): NewsPost["newsBlocks"] {
   const richBlocks = parsedBlocks.filter(
     (block): block is NewsRichTextBlockParsed =>
       block.__component === "news.rich-text" && typeof block.body === "string" && block.body.trim().length > 0,
   );
   const mediaBlocks = parsedBlocks.filter(
-    (block): block is NewsMediaBlockParsed => block.__component === "news.media" && !!block.image,
+    (block): block is NewsMediaBlockParsed => block.__component === "media" && !!block.image,
   );
 
   if (richBlocks.length !== 1 || mediaBlocks.length === 0) return parsedBlocks;
@@ -341,7 +348,7 @@ function coalesceBodyWithMediaBlocks(parsedBlocks: NewsPost["newsBlocks"]): News
 function finalizeNewsBlocks(parsedBlocks: NewsPost["newsBlocks"], src: Record<string, unknown>, baseUrl: string) {
   ensureTopLevelNewsBody(parsedBlocks, src);
 
-  const hasInlineMedia = parsedBlocks.some((block) => block.__component === "news.media" && !!block.image);
+  const hasInlineMedia = parsedBlocks.some((block) => block.__component === "media" && !!block.image);
   if (!hasInlineMedia) {
     const fallbackTopLevelImage = parseImageLike(src.image, baseUrl);
     if (fallbackTopLevelImage) {
@@ -386,11 +393,6 @@ function appendNewsBlocksFromEventBlocks(parsedBlocks: NewsPost["newsBlocks"], s
     if (!block || typeof block !== "object") continue;
     const parsed = parseStrapiEntity(block);
 
-    if (parsed.__component === "news.section" || parsed.__component === "events.news-section") {
-      pushNewsSectionBlocks(parsedBlocks, parsed, baseUrl);
-      continue;
-    }
-
     if (parsed.__component === "events.rich-text") {
       const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
       if (!body) continue;
@@ -402,9 +404,7 @@ function appendNewsBlocksFromEventBlocks(parsedBlocks: NewsPost["newsBlocks"], s
       const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
       if (!image) continue;
       const alreadyHasSameImage = parsedBlocks.some(
-        (existing) =>
-          existing.__component === "news.media" &&
-          existing.image?.url === image.src,
+        (existing) => existing.__component === "media" && existing.image?.url === image.src,
       );
       if (alreadyHasSameImage) continue;
       pushNewsMediaBlock(parsedBlocks, image, {
@@ -468,7 +468,7 @@ function pickPostThumbnail(src: Record<string, unknown>, baseUrl: string): { src
     for (const block of src.newsBlocks) {
       if (!block || typeof block !== "object") continue;
       const parsed = parseStrapiEntity(block);
-      if (parsed.__component !== "news.media") continue;
+      if (!isNewsMediaComponent(parsed.__component)) continue;
       const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
       if (image) return { src: image.src, alt: image.alt };
     }
@@ -598,7 +598,7 @@ function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPos
         continue;
       }
 
-      if (parsed.__component === "news.media") {
+      if (isNewsMediaComponent(parsed.__component)) {
         const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
         if (!image) continue;
         pushNewsMediaBlock(parsedBlocks, image, {
@@ -606,6 +606,7 @@ function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPos
           caption: parsed.caption,
           imagePosition: parsed.imagePosition,
           imageWidth: parsed.imageWidth,
+          imageParagraph: parsed.imageParagraph,
         });
       }
     }
@@ -790,6 +791,64 @@ function releaseDetailsToCredits(details: Record<string, unknown>): ReleaseCard[
   return credits;
 }
 
+function parseCreditsFromBody(body: string): { credits: ReleaseCard["credits"]; remainder: string } {
+  const lines = body
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const credits: ReleaseCard["credits"] = [];
+  const remainder: string[] = [];
+
+  for (const line of lines) {
+    let matched = false;
+
+    for (const field of RELEASE_CREDIT_FIELDS) {
+      const labelPattern = field.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const match = line.match(new RegExp(`^${labelPattern}\\s*(.*)$`, "i"));
+      if (match) {
+        const value = match[1].trim();
+        if (value) credits.push({ label: field.label, value });
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      const generic = line.match(/^([^:]+):\s*(.+)$/);
+      if (generic) {
+        const rawLabel = generic[1].trim().toLowerCase();
+        const field = RELEASE_CREDIT_FIELDS.find((entry) => {
+          const normalized = entry.label.replace(/:$/, "").trim().toLowerCase();
+          return normalized === rawLabel;
+        });
+        if (field) {
+          credits.push({ label: field.label, value: generic[2].trim() });
+          matched = true;
+        }
+      }
+    }
+
+    if (!matched) remainder.push(line);
+  }
+
+  return { credits, remainder: remainder.join("\n\n") };
+}
+
+function parseReleaseLinks(src: Record<string, unknown>): ReleaseCard["links"] {
+  if (!Array.isArray(src.releaseLinks)) return [];
+
+  const links: ReleaseCard["links"] = [];
+  for (const entry of src.releaseLinks) {
+    if (!entry || typeof entry !== "object") continue;
+    const parsed = parseStrapiEntity(entry);
+    const label = typeof parsed.label === "string" ? parsed.label.trim() : "";
+    const url = typeof parsed.url === "string" ? parsed.url.trim() : "";
+    if (label && url) links.push({ label, url });
+  }
+
+  return links;
+}
+
 function parseReleaseCredits(src: Record<string, unknown>): ReleaseCard["credits"] {
   const details = parseStrapiEntity(src.releaseDetails);
   if (details && typeof details === "object") {
@@ -833,10 +892,20 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
     const title = typeof src.title === "string" ? src.title.trim() : "";
     if (!title) continue;
 
-    const image = pickPostThumbnail(src, baseUrl);
-    const body = typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : "";
     const summary = typeof src.summary === "string" && src.summary.trim().length > 0 ? src.summary.trim() : undefined;
-    const credits = parseReleaseCredits(src);
+    let body = typeof src.body === "string" && src.body.trim().length > 0 ? src.body.trim() : "";
+    let credits = parseReleaseCredits(src);
+    const links = parseReleaseLinks(src);
+
+    if (credits.length === 0 && body) {
+      const parsedBody = parseCreditsFromBody(body);
+      if (parsedBody.credits.length > 0) {
+        credits = parsedBody.credits;
+        body = parsedBody.remainder;
+      }
+    }
+
+    const image = pickPostThumbnail(src, baseUrl);
 
     cards.push({
       id: resolvePostId(item, src, title),
@@ -847,6 +916,7 @@ function buildReleaseCards(items: unknown[], baseUrl: string): ReleaseCard[] {
       image: image ?? { src: "", alt: title },
       credits,
       body,
+      links,
     });
   }
 
@@ -865,11 +935,11 @@ function getNewsExcerpt(post: NewsPost): string {
 
 function getNewsImage(post: NewsPost): SiteContent["homeFeedPosts"][number]["image"] {
   const media = post.newsBlocks.find(
-    (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "news.media" }> =>
-      block.__component === "news.media" && !!block.image,
+    (block): block is Extract<NewsPost["newsBlocks"][number], { __component: "media" }> =>
+      block.__component === "media" && !!block.image,
   );
   if (!media || !media.image) return null;
-  return { src: getLocalThumbSrc(media.image.url), alt: media.image.alt };
+  return { src: media.image.url, alt: media.image.alt };
 }
 
 function getEventExcerpt(post: EventPost): string {
@@ -897,16 +967,11 @@ function getEventImage(post: EventPost): SiteContent["homeFeedPosts"][number]["i
       block.__component === "events.media" && !!block.image,
   );
   if (!media || !media.image) return null;
-  return { src: getLocalThumbSrc(media.image.url), alt: media.image.alt };
+  return { src: media.image.url, alt: media.image.alt };
 }
 
 function getFeedImage(image: SiteContent["homeFeedPosts"][number]["image"]): SiteContent["homeFeedPosts"][number]["image"] {
-  if (!image) return null;
-
-  return {
-    ...image,
-    src: getLocalThumbSrc(image.src),
-  };
+  return image;
 }
 
 function getReleaseExcerpt(card: ReleaseCard): string {
@@ -1059,7 +1124,7 @@ function normalizeStrapiPayload(json: any): Record<string, unknown> {
 }
 
 async function fetchStrapiSiteContent(): Promise<SiteContent> {
-  const baseUrl = STRAPI_URL!.replace(/\/+$/, "");
+  const baseUrl = STRAPI_URL.replace(/\/+$/, "");
   const siteContentEndpoint = `${baseUrl}/api/site-content?populate=aboutBackground`;
   const postsQuery = [
     "sort[0]=publishedOn:desc",
@@ -1072,6 +1137,7 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
     "populate[newsBlocks][populate]=*",
     "populate[eventBlocks][populate]=*",
     "populate[releaseDetails]=*",
+    "populate[releaseLinks]=*",
   ].join("&");
   const postsEndpoint = `${baseUrl}/api/posts?${postsQuery}`;
 
@@ -1124,23 +1190,16 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
   });
 }
 
-export async function getSiteContent(): Promise<SiteContent> {
-  if (CMS_MODE !== "strapi") return withDerivedContent(localSiteContent);
-  if (!STRAPI_URL) {
-    if (isDeployBuild()) {
-      throw new Error("[15love] STRAPI_URL is missing during deploy build");
-    }
-    return withDerivedContent(localSiteContent);
-  }
-
+function requireStrapiCredentials(): void {
   if (!STRAPI_TOKEN) {
-    if (isDeployBuild()) {
-      throw new Error(
-        "[15love] STRAPI_TOKEN is missing during deploy build. Add it in Vercel → Settings → Environment Variables.",
-      );
-    }
-    console.warn("[15love] STRAPI_TOKEN is not set — Strapi may return 403");
+    throw new Error(
+      "[15love] STRAPI_TOKEN is required (site/.env locally, Vercel → Environment Variables in production).",
+    );
   }
+}
+
+export async function getSiteContent(): Promise<SiteContent> {
+  requireStrapiCredentials();
 
   const effectiveCacheTtlMs = getEffectiveStrapiCacheTtlMs();
   const now = Date.now();
@@ -1165,11 +1224,7 @@ export async function getSiteContent(): Promise<SiteContent> {
     return content;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (isDeployBuild()) {
-      throw new Error(`[15love] Strapi fetch failed during deploy build: ${message}`);
-    }
-    console.warn("[15love] Failed to fetch from Strapi, using local fallback:", message);
-    return withDerivedContent(localSiteContent);
+    throw new Error(`[15love] Strapi fetch failed (${STRAPI_URL}): ${message}`);
   } finally {
     inFlightStrapiContentRequest = null;
   }
