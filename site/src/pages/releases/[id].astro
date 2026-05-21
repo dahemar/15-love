@@ -5,6 +5,8 @@ import MobileShell from "../../components/MobileShell.astro";
 import MobileReleaseDetail from "../../components/mobile/MobileReleaseDetail.astro";
 import { getSiteContent } from "../../lib/siteContent";
 import { getReleasePostViews } from "../../lib/postViews";
+import { releaseParagraphInnerHtml, splitReleaseBodyParagraphs } from "../../lib/releaseBody";
+import "../../styles/releases-detail.css";
 
 export async function getStaticPaths() {
   const content = await getSiteContent();
@@ -21,46 +23,10 @@ const content = await getSiteContent();
 const posts = getReleasePostViews(content);
 const post = posts.find((entry) => entry.id === Astro.params.id || entry.legacyId === Astro.params.id);
 const backHref = "/releases/";
+const bodyParagraphs = post?.body ? splitReleaseBodyParagraphs(post.body) : [];
 
 if (!post) {
   throw new Error(`Unknown release post: ${Astro.params.id}`);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function isHtmlLike(value: string): boolean {
-  return /<\/?[a-z][\s\S]*>/i.test(value);
-}
-
-function plainTextToHtml(value: string): string {
-  return value
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll("\n", "<br />")}</p>`)
-    .join("");
-}
-
-function flattenSingleRootDiv(html: string): string {
-  let out = html.trim();
-  let prev = "";
-  while (out !== prev && /^<div\b[^>]*>[\s\S]*<\/div>$/i.test(out)) {
-    prev = out;
-    const match = out.match(/^<div\b[^>]*>([\s\S]*)<\/div>$/i);
-    out = match ? match[1].trim() : out;
-  }
-  return out;
-}
-
-function renderReleaseBody(value?: string): string {
-  if (!value) return "";
-  const rendered = isHtmlLike(value) ? value : plainTextToHtml(value);
-  return flattenSingleRootDiv(rendered);
 }
 ---
 
@@ -107,17 +73,15 @@ function renderReleaseBody(value?: string): string {
             />
           ) : null}
           <h1 class="sr-only">{post.title}</h1>
-          {post.credits.length ? (
-            <div class="release-credits" aria-label="Release information">
-              {post.credits.map((credit) => (
-                <p class="credit-line">
-                  <span class="credit-label">{credit.label}</span>{" "}
-                  <span class="credit-value">{credit.value}</span>
-                </p>
-              ))}
-            </div>
-          ) : null}
-          {post.body ? <div class="release-body" set:html={renderReleaseBody(post.body)} /> : null}
+          {post.credits.map((credit) => (
+            <p class="credit-line">
+              <span class="credit-label">{credit.label}</span>{" "}
+              <span class="credit-value">{credit.value}</span>
+            </p>
+          ))}
+          {bodyParagraphs.map((block) => (
+            <p class="release-para" set:html={releaseParagraphInnerHtml(block)} />
+          ))}
           {post.links.length ? (
             <nav class="release-links" aria-label="Release links">
               {post.links.map((link, index) => (
@@ -175,7 +139,6 @@ function renderReleaseBody(value?: string): string {
     border: 1px solid #000;
     height: 100%;
     background: #fff;
-    overflow-y: auto;
   }
 
   .detail-back {
@@ -219,121 +182,6 @@ function renderReleaseBody(value?: string): string {
 
   .release-list-link:hover,
   .release-list-link.is-active {
-    text-decoration: underline;
-  }
-</style>
-
-<style is:global>
-  .releases-detail-box .release-detail {
-    padding: 16px 56px 16px 16px;
-    overflow: visible;
-  }
-
-  .releases-detail-box .release-detail::after {
-    content: "";
-    display: table;
-    clear: both;
-  }
-
-  .releases-detail-box .release-image {
-    float: left;
-    width: min(42%, 420px);
-    max-width: 420px;
-    height: auto;
-    margin: 0 18px 10px 0;
-    object-fit: cover;
-    border: 1px solid #000;
-    display: block;
-    shape-outside: margin-box;
-  }
-
-  .releases-detail-box .release-credits {
-    display: contents;
-  }
-
-  .releases-detail-box .credit-line {
-    display: block;
-    margin: 0 0 1px;
-    font-size: 16px;
-    line-height: 1.2;
-  }
-
-  .releases-detail-box .credit-label {
-    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    letter-spacing: 0.02em;
-  }
-
-  .releases-detail-box .credit-value {
-    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    letter-spacing: normal;
-  }
-
-  .releases-detail-box .release-body {
-    display: contents;
-  }
-
-  .releases-detail-box .release-body > div,
-  .releases-detail-box .release-body > section {
-    display: contents;
-  }
-
-  .releases-detail-box .release-body p,
-  .releases-detail-box .release-body li {
-    display: block;
-    margin: 0 0 0.55em;
-    font-size: 15.4px;
-    line-height: 1.28;
-  }
-
-  .releases-detail-box .release-body p:last-child {
-    margin-bottom: 0;
-  }
-
-  .releases-detail-box .release-links {
-    clear: both;
-    margin: 4px 0 0;
-    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    font-size: 16px;
-    line-height: 1.2;
-    letter-spacing: 0.02em;
-  }
-
-  .releases-detail-box .release-link {
-    color: #000;
-    text-decoration: none;
-  }
-
-  .releases-detail-box .release-link:hover {
-    text-decoration: underline;
-  }
-
-  .releases-detail-box .release-link-sep {
-    color: #000;
-  }
-
-  .releases-detail-box .post-tags {
-    clear: both;
-    margin-top: 16px;
-  }
-
-  .releases-detail-box .post-tags .tagsText {
-    display: inline-block;
-    margin-top: 0;
-    padding: 8px 10px;
-    border: 1px solid #000;
-    background: #fff;
-  }
-
-  .releases-detail-box .tagsLinks {
-    display: block;
-  }
-
-  .releases-detail-box .tagLink {
-    color: #000;
-    text-decoration: none;
-  }
-
-  .releases-detail-box .tagLink:hover {
     text-decoration: underline;
   }
 </style>

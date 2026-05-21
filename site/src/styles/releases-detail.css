@@ -1,0 +1,110 @@
+/* Release detail (desktop): floated cover + copy that wraps, then continues below. */
+
+.frame.is-news-layout .center-scroll:has(.releases-detail-box) {
+  overflow: visible;
+}
+
+.releases-detail-box {
+  overflow-y: auto;
+  overflow-x: visible;
+}
+
+.releases-detail-box .release-detail {
+  padding: 16px 56px 16px 16px;
+}
+
+.releases-detail-box .release-detail::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.releases-detail-box .release-image {
+  float: left;
+  width: min(42%, 420px);
+  max-width: 420px;
+  height: auto;
+  margin: 0 18px 12px 0;
+  object-fit: cover;
+  border: 1px solid #000;
+  display: block;
+  shape-outside: margin-box;
+}
+
+.releases-detail-box .credit-line,
+.releases-detail-box .release-para {
+  display: block;
+  margin: 0 0 0.55em;
+  font-size: 15.4px;
+  line-height: 1.28;
+  overflow: visible;
+  max-width: none;
+}
+
+.releases-detail-box .credit-line {
+  margin-bottom: 1px;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.releases-detail-box .credit-line:last-of-type {
+  margin-bottom: 0.55em;
+}
+
+.releases-detail-box .release-para:last-child {
+  margin-bottom: 0;
+}
+
+.releases-detail-box .credit-label {
+  font-family: "TT2020 Style B", "Inter", system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.releases-detail-box .credit-value {
+  font-family: "Inter", system-ui, sans-serif;
+  letter-spacing: normal;
+}
+
+.releases-detail-box .release-links {
+  clear: both;
+  margin: 4px 0 0;
+  font-family: "TT2020 Style B", "Inter", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.releases-detail-box .release-link {
+  color: #000;
+  text-decoration: none;
+}
+
+.releases-detail-box .release-link:hover {
+  text-decoration: underline;
+}
+
+.releases-detail-box .release-link-sep {
+  color: #000;
+}
+
+.releases-detail-box .post-tags {
+  clear: both;
+  margin-top: 16px;
+}
+
+.releases-detail-box .post-tags .tagsText {
+  display: inline-block;
+  margin-top: 0;
+  padding: 8px 10px;
+  border: 1px solid #000;
+  background: #fff;
+}
+
+.releases-detail-box .tagLink {
+  color: #000;
+  text-decoration: none;
+}
+
+.releases-detail-box .tagLink:hover {
+  text-decoration: underline;
+}
