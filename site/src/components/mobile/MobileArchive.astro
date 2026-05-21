@@ -1,42 +1,10 @@
 ---
 import { getSiteContent } from "../../lib/siteContent";
-import {
-  getEventPostViews,
-  getNewsPostViews,
-  getReleasePostViews,
-  type EventPostView,
-  type NewsPostView,
-  type ReleasePostView,
-} from "../../lib/postViews";
-import { clampText } from "../../lib/mobileExcerpt";
-import MobilePostCard from "./MobilePostCard.astro";
 
 const content = await getSiteContent();
 const entries = content.archiveEntries;
 const tagOptions = Array.from(new Set(entries.flatMap((entry) => entry.tags))).sort((left, right) => left.localeCompare(right));
 const dateOptions = Array.from(new Set(entries.map((entry) => entry.dateLabel).filter(Boolean)));
-
-const newsById = new Map(getNewsPostViews(content).map((post) => [post.id, post]));
-const eventsById = new Map(getEventPostViews(content).map((post) => [post.id, post]));
-const releasesById = new Map(getReleasePostViews(content).map((post) => [post.id, post]));
-
-function newsExcerpt(post: NewsPostView): string {
-  if (post.summary?.trim()) return clampText(post.summary);
-  const rich = post.newsBlocks.find((block) => block.__component === "news.rich-text" && block.body);
-  if (rich?.__component === "news.rich-text" && rich.body) return clampText(rich.body);
-  return "";
-}
-
-function eventExcerpt(post: EventPostView): string {
-  if (post.body?.trim()) return clampText(post.body);
-  return "";
-}
-
-function releaseExcerpt(post: ReleasePostView): string {
-  if (post.summary?.trim()) return clampText(post.summary);
-  if (post.body?.trim()) return clampText(post.body);
-  return "";
-}
 ---
 
 <section class="m-panel m-archive">
@@ -70,52 +38,31 @@ function releaseExcerpt(post: ReleasePostView): string {
     </label>
   </header>
 
-  <ul class="m-list m-archive-list">
-    {entries.map((entry, index) => {
-      const news = entry.category === "news" ? newsById.get(entry.id) : undefined;
-      const event = entry.category === "events" ? eventsById.get(entry.id) : undefined;
-      const release = entry.category === "releases" ? releasesById.get(entry.id) : undefined;
-
-      let image = entry.thumbnail;
-      if (event?.image?.url) {
-        image = { src: event.image.url, alt: event.image.alt };
-      } else if (release?.image?.src?.trim()) {
-        image = { src: release.image.src, alt: release.image.alt };
-      } else if (news?.thumbnail) {
-        image = news.thumbnail;
-      }
-
-      const excerpt =
-        entry.category === "news" && news
-          ? newsExcerpt(news)
-          : entry.category === "events" && event
-            ? eventExcerpt(event)
-            : entry.category === "releases" && release
-              ? releaseExcerpt(release)
-              : "";
-
-      const meta =
-        entry.category === "events" && event
-          ? [event.venue, event.dateLabel].filter(Boolean).join(" — ")
-          : undefined;
-
-      return (
-        <MobilePostCard
-          class="m-archive-item"
-          data-type={entry.category}
-          data-tags={entry.tags.join("|")}
-          data-date={entry.dateLabel}
-          href={entry.href}
-          title={entry.title}
-          dateLabel={entry.dateLabel}
-          image={image}
-          credits={release?.credits}
-          meta={meta}
-          excerpt={excerpt}
-          eager={index < 2}
-        />
-      );
-    })}
+  <ul class="m-thumb-grid m-archive-grid">
+    {entries.map((entry, index) => (
+      <li
+        class="m-thumb-cell m-archive-item"
+        data-type={entry.category}
+        data-tags={entry.tags.join("|")}
+        data-date={entry.dateLabel}
+      >
+        <a href={entry.href} data-astro-prefetch="hover" title={entry.title}>
+          {entry.thumbnail?.src ? (
+            <img
+              src={entry.thumbnail.src}
+              alt={entry.thumbnail.alt}
+              width="320"
+              height="320"
+              loading={index < 9 ? "eager" : "lazy"}
+              decoding="async"
+              fetchpriority={index < 9 ? "high" : undefined}
+            />
+          ) : (
+            <span class="m-thumb-empty" aria-hidden="true"></span>
+          )}
+        </a>
+      </li>
+    ))}
   </ul>
 </section>
 
