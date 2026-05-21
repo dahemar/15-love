@@ -46,9 +46,21 @@ function plainTextToHtml(value: string): string {
     .join("");
 }
 
+function flattenSingleRootDiv(html: string): string {
+  let out = html.trim();
+  let prev = "";
+  while (out !== prev && /^<div\b[^>]*>[\s\S]*<\/div>$/i.test(out)) {
+    prev = out;
+    const match = out.match(/^<div\b[^>]*>([\s\S]*)<\/div>$/i);
+    out = match ? match[1].trim() : out;
+  }
+  return out;
+}
+
 function renderReleaseBody(value?: string): string {
   if (!value) return "";
-  return isHtmlLike(value) ? value : plainTextToHtml(value);
+  const rendered = isHtmlLike(value) ? value : plainTextToHtml(value);
+  return flattenSingleRootDiv(rendered);
 }
 ---
 
@@ -188,27 +200,6 @@ function renderReleaseBody(value?: string): string {
     background: #fff;
   }
 
-  .release-detail {
-    display: grid;
-    grid-template-columns: min(42%, 420px) minmax(0, 1fr);
-    column-gap: 18px;
-    row-gap: 8px;
-    align-items: start;
-    padding: 16px 56px 16px 16px;
-  }
-
-  .release-image {
-    grid-column: 1;
-    grid-row: 1;
-    width: 100%;
-    max-width: 420px;
-    height: auto;
-    margin: 0;
-    object-fit: cover;
-    border: 1px solid #000;
-    display: block;
-  }
-
   .sr-only {
     position: absolute;
     width: 1px;
@@ -221,73 +212,6 @@ function renderReleaseBody(value?: string): string {
     border: 0;
   }
 
-  .release-credits {
-    grid-column: 2;
-    grid-row: 1;
-    align-self: start;
-    display: block;
-  }
-
-  .credit-line {
-    margin: 0 0 1px;
-    font-size: 16px;
-    line-height: 1.2;
-  }
-
-  .credit-label {
-    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    letter-spacing: 0.02em;
-  }
-
-  .credit-value {
-    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    letter-spacing: normal;
-  }
-
-  .release-body {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    display: block;
-    min-width: 0;
-  }
-
-  .release-body :global(> div) {
-    display: block;
-  }
-
-  .release-body :global(p) {
-    margin: 0 0 0.55em;
-    font-size: 15.4px;
-    line-height: 1.28;
-  }
-
-  .release-body :global(p:last-child) {
-    margin-bottom: 0;
-  }
-
-  .release-links {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    margin: 4px 0 0;
-    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    font-size: 16px;
-    line-height: 1.2;
-    letter-spacing: 0.02em;
-  }
-
-  .release-link {
-    color: #000;
-    text-decoration: none;
-  }
-
-  .release-link:hover {
-    text-decoration: underline;
-  }
-
-  .release-link-sep {
-    color: #000;
-  }
-
   .release-list-link {
     color: inherit;
     text-decoration: none;
@@ -297,14 +221,102 @@ function renderReleaseBody(value?: string): string {
   .release-list-link.is-active {
     text-decoration: underline;
   }
+</style>
 
-  .post-tags {
-    grid-column: 1 / -1;
-    grid-row: 4;
-    margin-top: 8px;
+<style is:global>
+  .releases-detail-box .release-detail {
+    padding: 16px 56px 16px 16px;
+    overflow: visible;
   }
 
-  .post-tags .tagsText {
+  .releases-detail-box .release-detail::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+
+  .releases-detail-box .release-image {
+    float: left;
+    width: min(42%, 420px);
+    max-width: 420px;
+    height: auto;
+    margin: 0 18px 10px 0;
+    object-fit: cover;
+    border: 1px solid #000;
+    display: block;
+    shape-outside: margin-box;
+  }
+
+  .releases-detail-box .release-credits {
+    display: contents;
+  }
+
+  .releases-detail-box .credit-line {
+    display: block;
+    margin: 0 0 1px;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .releases-detail-box .credit-label {
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: 0.02em;
+  }
+
+  .releases-detail-box .credit-value {
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: normal;
+  }
+
+  .releases-detail-box .release-body {
+    display: contents;
+  }
+
+  .releases-detail-box .release-body > div,
+  .releases-detail-box .release-body > section {
+    display: contents;
+  }
+
+  .releases-detail-box .release-body p,
+  .releases-detail-box .release-body li {
+    display: block;
+    margin: 0 0 0.55em;
+    font-size: 15.4px;
+    line-height: 1.28;
+  }
+
+  .releases-detail-box .release-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  .releases-detail-box .release-links {
+    clear: both;
+    margin: 4px 0 0;
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+  }
+
+  .releases-detail-box .release-link {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .releases-detail-box .release-link:hover {
+    text-decoration: underline;
+  }
+
+  .releases-detail-box .release-link-sep {
+    color: #000;
+  }
+
+  .releases-detail-box .post-tags {
+    clear: both;
+    margin-top: 16px;
+  }
+
+  .releases-detail-box .post-tags .tagsText {
     display: inline-block;
     margin-top: 0;
     padding: 8px 10px;
@@ -312,16 +324,16 @@ function renderReleaseBody(value?: string): string {
     background: #fff;
   }
 
-  .tagsLinks {
+  .releases-detail-box .tagsLinks {
     display: block;
   }
 
-  .tagLink {
+  .releases-detail-box .tagLink {
     color: #000;
     text-decoration: none;
   }
 
-  .tagLink:hover {
+  .releases-detail-box .tagLink:hover {
     text-decoration: underline;
   }
 </style>

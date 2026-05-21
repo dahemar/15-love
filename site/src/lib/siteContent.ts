@@ -11,14 +11,23 @@ const STRAPI_TOKEN = resolveStrapiToken();
 const STRAPI_CACHE_TTL_MS = Number(import.meta.env.STRAPI_CACHE_TTL_MS ?? (import.meta.env.DEV ? "0" : "60000"));
 const STRAPI_DEV_BURST_CACHE_TTL_MS = Number(import.meta.env.STRAPI_DEV_BURST_CACHE_TTL_MS ?? "1000");
 
+const STRAPI_FETCH_HEADERS: HeadersInit = {
+  Accept: "application/json",
+  "Accept-Encoding": "gzip, deflate, br",
+  ...(STRAPI_TOKEN ? { Authorization: `Bearer ${STRAPI_TOKEN}` } : {}),
+};
+
 let cachedStrapiContent: SiteContent | null = null;
 let cachedStrapiContentExpiresAt = 0;
 let inFlightStrapiContentRequest: Promise<SiteContent> | null = null;
 
 function getEffectiveStrapiCacheTtlMs(): number {
-  if (!import.meta.env.DEV) return Math.max(0, STRAPI_CACHE_TTL_MS);
-  if (STRAPI_CACHE_TTL_MS > 0) return STRAPI_CACHE_TTL_MS;
-  return Math.max(0, STRAPI_DEV_BURST_CACHE_TTL_MS);
+  if (import.meta.env.DEV) {
+    if (STRAPI_CACHE_TTL_MS > 0) return STRAPI_CACHE_TTL_MS;
+    return Math.max(0, STRAPI_DEV_BURST_CACHE_TTL_MS);
+  }
+  // Static production builds: one Strapi round-trip per Node process.
+  return Number.POSITIVE_INFINITY;
 }
 
 async function refreshStrapiContent(): Promise<SiteContent> {
@@ -1151,17 +1160,13 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
   ].join("&");
   const postsEndpoint = `${baseUrl}/api/posts?${postsQuery}`;
 
-  const headers = {
-    ...(STRAPI_TOKEN ? { Authorization: `Bearer ${STRAPI_TOKEN}` } : {}),
-  };
-
   const [siteContentResponse, postsResponse] = await Promise.all([
     fetch(siteContentEndpoint, {
-      headers,
+      headers: STRAPI_FETCH_HEADERS,
       cache: "no-store",
     }),
     fetch(postsEndpoint, {
-      headers,
+      headers: STRAPI_FETCH_HEADERS,
       cache: "no-store",
     }),
   ]);
