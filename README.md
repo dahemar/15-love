@@ -30,6 +30,8 @@ Without `STRAPI_TOKEN`, the build fails instead of publishing empty or stale pag
 
 After adding the token, redeploy from the Vercel dashboard or push to `main`.
 
+Production deploys track the **`main`** branch. The Astro app source lives in `site/src` (see root `astro.config.mjs`). Pushes only to other branches (e.g. `push-image-width`) will not update the live site until they are merged into `main`.
+
 ## Commands
 
 | Command | Action |

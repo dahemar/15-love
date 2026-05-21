@@ -1,4 +1,7 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
   "env": {
     "STRAPI_URL": "https://strapi-client-15-love.onrender.com"
   },
