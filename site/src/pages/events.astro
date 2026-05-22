@@ -120,6 +120,11 @@ const events = eventPosts.map((post) => ({ title: post.title, href: post.href })
       frame.style.width = `${width}px`;
       stream.style.width = `${width}px`;
       frame.style.height = `${maxHeight}px`;
+
+      const scrollTop = scroll.getBoundingClientRect().top;
+      stream.querySelectorAll(".event-entry-start").forEach(start => {
+        start.style.borderTop = Math.abs(start.getBoundingClientRect().top - scrollTop) < 2 ? "none" : "";
+      });
     };
 
     const schedule = () => requestAnimationFrame(layout);
@@ -248,13 +253,13 @@ const events = eventPosts.map((post) => ({ title: post.title, href: post.href })
   }
 
   .event-entry-date {
-    margin: 8px 0 0;
+    margin: 8px 0 5px;
     font-size: 14px;
     line-height: 1;
   }
 
   .event-entry-venue {
-    margin: 6px 0 0;
+    margin: 6px 0 10px;
     font-size: 16px;
     line-height: 1.2;
     font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
