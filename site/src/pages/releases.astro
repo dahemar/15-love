@@ -49,17 +49,15 @@ const releaseCards = getReleasePostViews(content);
                   ) : (
                     <div class="release-image release-image-empty" aria-hidden="true"></div>
                   )}
-                  <div class="release-meta">
-                    {card.title ? <h3 class="release-title">{card.title}</h3> : null}
-                    <div class="release-credits" aria-label="Release credits">
-                      {card.credits.map((c) => (
-                        <div class="credit-line">
-                          <span class="credit-label">{c.label}</span> <span class="credit-value">{c.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {card.body ? <p class="release-body">{card.body}</p> : null}
+                  {card.title ? <h3 class="release-title">{card.title}</h3> : null}
+                  <div class="release-credits" aria-label="Release credits">
+                    {card.credits.map((c) => (
+                      <div class="credit-line">
+                        <span class="credit-label">{c.label}</span> <span class="credit-value">{c.value}</span>
+                      </div>
+                    ))}
                   </div>
+                  {card.body ? <p class="release-body">{card.body}</p> : null}
                 </a>
               </article>
             ))}
@@ -122,10 +120,13 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-post {
-    display: grid;
-    grid-template-columns: 340px 1fr;
-    column-gap: 14px;
-    align-items: start;
+    display: block;
+  }
+
+  .release-post::after {
+    content: "";
+    display: table;
+    clear: both;
   }
 
   .release-card-link,
@@ -140,19 +141,18 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-image {
+    float: left;
     width: 340px;
     height: 340px;
+    margin: 0 14px 10px 0;
     object-fit: cover;
     border: 1px solid #000;
     display: block;
-  }
-
-  .release-meta {
-    min-width: 0;
-    width: 100%;
+    shape-outside: margin-box;
   }
 
   .release-title {
+    display: block;
     margin: 0 0 12px;
     font-size: 22px;
     line-height: 1.2;
@@ -165,16 +165,14 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-credits {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 14px;
-    font-size: 16px;
-    line-height: 1.2;
+    display: contents;
   }
 
   .credit-line {
-    margin: 0;
+    display: block;
+    margin: 0 0 2px;
+    font-size: 16px;
+    line-height: 1.2;
   }
 
   .credit-label {
@@ -188,6 +186,7 @@ const releaseCards = getReleasePostViews(content);
   }
 
   .release-body {
+    display: block;
     margin: 0;
     font-size: 15.4px;
     line-height: 1.25;

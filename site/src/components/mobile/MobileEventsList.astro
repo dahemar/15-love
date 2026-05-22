@@ -2,15 +2,21 @@
 import { getSiteContent } from "../../lib/siteContent";
 import { getEventPostViews } from "../../lib/postViews";
 import { clampText } from "../../lib/mobileExcerpt";
-import MobilePostCard from "./MobilePostCard.astro";
 
 const content = await getSiteContent();
 const posts = getEventPostViews(content);
 
 function eventExcerpt(post: (typeof posts)[number]): string {
-  if (post.summary?.trim()) return clampText(post.summary);
   if (post.body?.trim()) return clampText(post.body);
+  const rich = post.eventBlocks.find((block) => block.__component === "events.rich-text" && block.body);
+  if (rich?.__component === "events.rich-text" && rich.body) return clampText(rich.body);
   return "";
+}
+
+function formatDateLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en", { month: "short", year: "numeric" }).format(date);
 }
 ---
 
@@ -18,17 +24,39 @@ function eventExcerpt(post: (typeof posts)[number]): string {
   <ul class="m-list">
     {posts.map((post, index) => {
       const image = post.image?.url ? { src: post.image.url, alt: post.image.alt } : null;
-      const meta = [post.venue, post.dateLabel].filter(Boolean).join(" — ");
+      const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
+      const excerpt = eventExcerpt(post);
+
       return (
-        <MobilePostCard
-          href={post.href}
-          title={post.title}
-          image={image}
-          meta={meta || undefined}
-          excerpt={eventExcerpt(post)}
-          eager={index < 2}
-        />
+        <li class="m-item">
+          <a class="m-item-link m-post-card" href={post.href} data-astro-prefetch="hover">
+            {image?.src ? (
+              <img
+                class="m-post-media"
+                src={image.src}
+                alt={image.alt}
+                width="720"
+                height="720"
+                loading={index < 2 ? "eager" : "lazy"}
+                decoding="async"
+                fetchpriority={index < 2 ? "high" : undefined}
+              />
+            ) : null}
+            <h2 class="m-post-title">{post.title}</h2>
+            {headerDate ? <p class="m-post-date">{headerDate}</p> : null}
+            {post.venue ? <p class="m-item-meta">{post.venue}</p> : null}
+            {excerpt ? <p class="m-post-body">{excerpt}</p> : null}
+          </a>
+        </li>
       );
     })}
   </ul>
 </section>
+
+<style>
+  .m-post-date {
+    margin: 0 0 10px;
+    font-size: var(--m-type-meta);
+    line-height: 1;
+  }
+</style>

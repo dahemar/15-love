@@ -3,11 +3,14 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import SiteShell from "../components/SiteShell.astro";
 import MobileShell from "../components/MobileShell.astro";
 import MobileEventsList from "../components/mobile/MobileEventsList.astro";
+import { renderRichBody } from "../lib/html";
 import { getSiteContent } from "../lib/siteContent";
+import { newsImageDimensions } from "../lib/newsImageWidth";
 import { getEventPostViews } from "../lib/postViews";
 
 const content = await getSiteContent();
-const cards = getEventPostViews(content);
+const eventPosts = getEventPostViews(content);
+const events = eventPosts.map((post) => ({ title: post.title, href: post.href }));
 ---
 
 <BaseLayout title="15 love — Events">
@@ -19,7 +22,7 @@ const cards = getEventPostViews(content);
           <h2 class="coltitle">events</h2>
         </div>
         <ul class="list">
-          {cards.map((item) => (
+          {events.map((item) => (
             <li class="li">
               <span class="heart">♡</span>
               <a class="text event-list-link" href={item.href} data-astro-prefetch="hover">{item.title}</a>
@@ -30,36 +33,54 @@ const cards = getEventPostViews(content);
     </div>
 
     <div slot="center" class="events-wide">
-      <section class="events-rail-box" aria-label="Events horizontal feed">
-        <div class="events-rail-scroll">
-          <div class="events-rail">
-            {cards.map((card) => (
-              <article class="event-card" id={card.id}>
-                <a class="event-post event-card-link" href={card.href} data-astro-prefetch="hover">
-                  {card.image ? (
-                    <img
-                      class="event-image"
-                      src={card.image.url}
-                      alt={card.image.alt}
-                      width="520"
-                      height="340"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <div class="event-image event-image-empty" aria-hidden="true"></div>
-                  )}
+      <section class="events-stream-box" aria-label="Events feed">
+        <div class="events-stream-scroll">
+          <div class="events-stream-frame">
+            <div class="events-stream">
+            {eventPosts.map((post, postIndex) => (
+              <article class="event-entry" id={post.id}>
+                <header class="event-entry-start">
+                  <h3 class="event-entry-title">
+                    <a class="event-entry-link" href={post.href} data-astro-prefetch="hover">{post.title}</a>
+                  </h3>
+                  {post.dateLabel ? <p class="event-entry-date">{post.dateLabel}</p> : null}
+                  {post.venue ? <p class="event-entry-venue">{post.venue}</p> : null}
+                </header>
 
-                  <div class="event-meta">
-                    <h3 class="event-title">{card.title}</h3>
-                    {card.venue || card.dateLabel ? (
-                      <p class="event-subline">{[card.venue, card.dateLabel].filter(Boolean).join(" — ")}</p>
-                    ) : null}
-                    {card.body ? <p class="event-body">{card.body}</p> : null}
-                  </div>
-                </a>
+                <div class="event-entry-body">
+                {post.eventBlocks.map((block, blockIndex) => {
+                  if (block.__component === "events.details") return null;
+
+                  if (block.__component === "events.rich-text") {
+                    return <div class="event-block event-richtext" set:html={renderRichBody(block.body)} />;
+                  }
+
+                  if (block.__component !== "events.media" || !block.image) return null;
+                  const size = block.imageWidth ?? "medium";
+                  const fallback = newsImageDimensions(size);
+                  const width = block.image.width ?? fallback.width;
+                  const height = block.image.height ?? fallback.height;
+
+                  return (
+                    <figure class={`event-block event-media is-${block.imagePosition} is-${size}`}>
+                      <img
+                        class="event-image"
+                        src={block.image.url}
+                        alt={block.image.alt}
+                        width={width}
+                        height={height}
+                        loading={postIndex === 0 && blockIndex === 0 ? "eager" : "lazy"}
+                        decoding="async"
+                        fetchpriority={postIndex === 0 && blockIndex === 0 ? "high" : undefined}
+                      />
+                      {block.caption ? <figcaption class="event-caption">{block.caption}</figcaption> : null}
+                    </figure>
+                  );
+                })}
+                </div>
               </article>
             ))}
+            </div>
           </div>
         </div>
       </section>
@@ -73,6 +94,44 @@ const cards = getEventPostViews(content);
     </MobileShell>
   </div>
 </BaseLayout>
+
+<script is:inline>
+  (() => {
+    const stream = document.querySelector(".events-stream");
+    const frame = document.querySelector(".events-stream-frame");
+    const scroll = document.querySelector(".events-stream-scroll");
+    if (!stream || !frame || !scroll) return;
+
+    const getColWidth = () =>
+      parseFloat(getComputedStyle(stream).getPropertyValue("--events-column-width")) || 712;
+    const panelWidth = (n, cw) => n * cw + Math.max(0, n - 1);
+
+    const layout = () => {
+      const colWidth = getColWidth();
+      const maxHeight = scroll.clientHeight;
+      if (!maxHeight || !colWidth) return;
+
+      const entryCount = stream.querySelectorAll(".event-entry").length;
+      const columnCount = Math.max(1, entryCount);
+      const width = panelWidth(columnCount, colWidth);
+
+      stream.style.height = `${maxHeight}px`;
+      stream.style.minHeight = `${maxHeight}px`;
+      frame.style.width = `${width}px`;
+      stream.style.width = `${width}px`;
+      frame.style.height = `${maxHeight}px`;
+    };
+
+    const schedule = () => requestAnimationFrame(layout);
+    schedule();
+    window.addEventListener("resize", schedule);
+    document.fonts?.ready?.then(schedule);
+    stream.querySelectorAll("img").forEach((img) => {
+      if (!img.complete) img.addEventListener("load", schedule, { once: true });
+    });
+    if ("ResizeObserver" in window) new ResizeObserver(schedule).observe(scroll);
+  })();
+</script>
 
 <style>
   .events-left {
@@ -88,89 +147,210 @@ const cards = getEventPostViews(content);
   }
 
   .events-wide {
+    --events-column-width: 712px;
+    --events-column-padding-x: 26px;
     height: 100%;
+    width: 100%;
+    min-width: 0;
   }
 
-  .events-rail-box {
-    border: 1px solid #000;
+  .events-stream-box {
     height: 100%;
-    background: #fff;
+    width: 100%;
+    overflow: hidden;
   }
 
-  .events-rail-scroll {
+  .events-stream-scroll {
     height: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+    width: 100%;
+    border: 1px solid #000;
+    box-sizing: border-box;
+    background: #fff;
   }
 
-  .events-rail {
-    min-height: 100%;
-    width: max-content;
-    display: flex;
+  .events-stream-frame {
+    display: inline-block;
+    vertical-align: top;
+    border: none;
+    height: 100%;
+    width: fit-content;
+    max-width: none;
+    background: transparent;
+    box-sizing: border-box;
   }
 
-  .event-card {
-    width: 860px;
-    min-height: 100%;
-    border-right: 1px solid #000;
-    padding: 12px;
+  .events-stream {
+    height: 100%;
+    width: auto;
+    box-sizing: border-box;
+    column-width: var(--events-column-width);
+    column-gap: 0;
+    column-rule: 1px solid #000;
+    column-fill: auto;
+    -webkit-column-fill: auto;
+  }
+
+  .event-entry {
     display: block;
+    width: 100%;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+    box-sizing: border-box;
   }
 
-  .event-post {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+  .event-entry-start {
+    display: block;
+    width: 100%;
+    padding: 16px var(--events-column-padding-x) 10px;
+    margin: 0;
+    border-top: 1px solid #000;
+    box-sizing: border-box;
   }
 
-  .event-card-link,
+  .event-entry:first-child .event-entry-start {
+    border-top: none;
+  }
+
+  .event-entry-body {
+    display: block;
+    width: 100%;
+    padding: 0 var(--events-column-padding-x) 16px;
+    margin: 0;
+    box-sizing: border-box;
+  }
+
+  .event-entry-body::after {
+    content: "";
+    display: block;
+    clear: both;
+  }
+
+  .event-entry-link,
   .event-list-link {
     color: inherit;
     text-decoration: none;
   }
 
-  .event-card-link:hover .event-title,
+  .event-entry-link:hover,
   .event-list-link:hover {
     text-decoration: underline;
   }
 
-  .event-image {
-    width: 520px;
-    max-width: 100%;
-    height: 340px;
-    object-fit: cover;
-    border: 1px solid #000;
-    display: block;
-  }
-
-  .event-image-empty {
-    border: 1px solid #000;
-    background: transparent;
-  }
-
-  .event-meta {
-    max-width: 520px;
-  }
-
-  .event-title {
-    margin: 0 0 10px;
+  .event-entry-title {
+    margin: 0;
     font-size: 22px;
-    line-height: 1.2;
-    font-weight: 400;
+    line-height: 1.15;
+    font-weight: 600;
   }
 
-  .event-subline {
-    margin: 0 0 12px;
+  .event-entry-date {
+    margin: 8px 0 0;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .event-entry-venue {
+    margin: 6px 0 0;
     font-size: 16px;
     line-height: 1.2;
     font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   }
 
-  .event-body {
+  .event-block {
+    min-width: 0;
+    margin-bottom: 10px;
+  }
+
+  .event-richtext {
+    max-width: none;
+    font-size: 16px;
+    line-height: 1.36;
+  }
+
+  .event-richtext :global(p) {
+    margin: 0 0 0.55em;
+    orphans: 2;
+    widows: 2;
+  }
+
+  .event-richtext :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .event-media {
     margin: 0;
-    font-size: 15.4px;
+    display: grid;
+    gap: 6px;
+    break-inside: avoid;
+  }
+
+  .event-media.is-left {
+    float: left;
+    margin: 0 20px 10px 0;
+  }
+
+  .event-media.is-right {
+    float: right;
+    margin: 0 0 10px 20px;
+  }
+
+  .event-media.is-center {
+    clear: both;
+    margin: 0 auto 10px;
+  }
+
+  .event-media.is-full {
+    clear: both;
+    width: 100%;
+    max-width: 636px;
+  }
+
+  .event-media.is-xs {
+    width: 140px;
+  }
+
+  .event-media.is-narrow {
+    width: 220px;
+  }
+
+  .event-media.is-medium {
+    width: 320px;
+  }
+
+  .event-media.is-wide {
+    width: 460px;
+  }
+
+  .event-media.is-xl {
+    width: 540px;
+  }
+
+  .event-media.is-max {
+    width: 636px;
+  }
+
+  .event-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #000;
+    object-fit: cover;
+  }
+
+  .event-caption {
+    max-width: 32ch;
+    font-size: 12px;
     line-height: 1.25;
-    white-space: pre-line;
+  }
+
+  @media (max-width: 1200px) {
+    .events-wide {
+      --events-column-width: 596px;
+      --events-column-padding-x: 24px;
+    }
   }
 </style>

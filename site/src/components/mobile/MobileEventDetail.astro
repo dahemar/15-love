@@ -21,8 +21,8 @@ const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
 
 <article class="m-detail">
   <MobileDetailTop backHref="/events/" backLabel="Back to events" tags={post.tags} />
-  {headerDate ? <p class="m-detail-date">{headerDate}</p> : null}
   <h1>{post.title}</h1>
+  {headerDate ? <p class="m-post-date">{headerDate}</p> : null}
   {post.venue ? <p class="m-event-venue">{post.venue}</p> : null}
 
   {post.eventBlocks.map((block, index) => {
@@ -54,6 +54,12 @@ const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
 </article>
 
 <style>
+  .m-post-date {
+    margin: 0 0 10px;
+    font-size: var(--m-type-meta);
+    line-height: 1;
+  }
+
   .m-event-venue {
     margin: 0 0 10px;
     font-family: "TT2020 Style B", "Inter", system-ui, sans-serif;

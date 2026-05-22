@@ -7,7 +7,6 @@ import { renderRichBody } from "../../lib/html";
 import { getSiteContent } from "../../lib/siteContent";
 import { newsImageDimensions } from "../../lib/newsImageWidth";
 import { getEventPostViews, getEventStaticPathParams } from "../../lib/postViews";
-import "../../styles/events-detail.css";
 
 export async function getStaticPaths() {
   const content = await getSiteContent();
@@ -51,7 +50,7 @@ const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
       </section>
     </div>
 
-    <div slot="center" class="events-wide">
+    <div slot="center" class="events-detail-wide">
       <section class="events-detail-box" aria-label="Event detail">
         <a
           class="detail-back"
@@ -61,37 +60,39 @@ const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
         >
           <span aria-hidden="true">←</span>
         </a>
-        <article class="event-entry">
-          <header class="event-entry-header">
-            {headerDate ? <p class="event-date">{headerDate}</p> : null}
-            <h1 class="event-entry-title">{post.title}</h1>
-            {post.venue ? <p class="event-subline">{post.venue}</p> : null}
+        <article class="events-entry">
+          <header class="events-entry-header">
+            <h1 class="events-entry-title">{post.title}</h1>
+            {headerDate ? <p class="events-entry-date">{headerDate}</p> : null}
+            {post.venue ? <p class="events-entry-venue">{post.venue}</p> : null}
           </header>
 
           {post.eventBlocks.map((block, index) => {
             if (block.__component === "events.details") return null;
 
             if (block.__component === "events.rich-text") {
-              return <div class="event-block event-richtext" set:html={renderRichBody(block.body)} />;
+              return <div class="events-block events-richtext" set:html={renderRichBody(block.body)} />;
             }
 
             if (block.__component !== "events.media" || !block.image) return null;
             const size = block.imageWidth ?? "medium";
             const fallback = newsImageDimensions(size);
+            const width = block.image.width ?? fallback.width;
+            const height = block.image.height ?? fallback.height;
 
             return (
-              <figure class={`event-block event-media is-${block.imagePosition} is-${size}`}>
+              <figure class={`events-block events-media is-${block.imagePosition} is-${size}`}>
                 <img
-                  class="event-image"
+                  class="events-image"
                   src={block.image.url}
                   alt={block.image.alt}
-                  width={block.image.width ?? fallback.width}
-                  height={block.image.height ?? fallback.height}
+                  width={width}
+                  height={height}
                   loading={index === 0 ? "eager" : "lazy"}
                   decoding="async"
                   fetchpriority={index === 0 ? "high" : undefined}
                 />
-                {block.caption ? <figcaption class="event-caption">{block.caption}</figcaption> : null}
+                {block.caption ? <figcaption class="events-caption">{block.caption}</figcaption> : null}
               </figure>
             );
           })}
@@ -134,7 +135,7 @@ const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
     margin: 0;
   }
 
-  .events-wide {
+  .events-detail-wide {
     height: 100%;
   }
 
@@ -168,6 +169,133 @@ const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
     background: #fff;
   }
 
+  .events-entry {
+    min-height: 100%;
+    padding: 16px 22px 18px;
+    background: #fff;
+    box-sizing: border-box;
+  }
+
+  .events-entry::after {
+    content: "";
+    display: block;
+    clear: both;
+  }
+
+  .events-entry-header {
+    width: min(100%, 780px);
+    max-width: none;
+    padding-right: 56px;
+    margin-bottom: 28px;
+  }
+
+  .events-entry-title {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.1;
+    font-weight: 400;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: manual;
+  }
+
+  .events-entry-date {
+    margin: 8px 0 24px;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .events-entry-venue {
+    margin: 6px 0 8px;
+    font-size: 16px;
+    line-height: 1.2;
+    font-family: "TT2020 Style B", "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .events-block {
+    min-width: 0;
+    margin-bottom: 14px;
+  }
+
+  .events-richtext {
+    max-width: none;
+    font-size: 16px;
+    line-height: 1.36;
+  }
+
+  .events-richtext :global(p) {
+    margin: 0 0 0.85em;
+  }
+
+  .events-richtext :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .events-media {
+    margin: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .events-media.is-left {
+    float: left;
+    margin: 0 20px 14px 0;
+  }
+
+  .events-media.is-right {
+    float: right;
+    margin: 0 0 14px 20px;
+  }
+
+  .events-media.is-center {
+    clear: both;
+    margin: 0 auto 14px;
+  }
+
+  .events-media.is-full {
+    clear: both;
+    width: 100%;
+    max-width: 636px;
+  }
+
+  .events-media.is-xs {
+    width: 140px;
+  }
+
+  .events-media.is-narrow {
+    width: 220px;
+  }
+
+  .events-media.is-medium {
+    width: 320px;
+  }
+
+  .events-media.is-wide {
+    width: 460px;
+  }
+
+  .events-media.is-xl {
+    width: 540px;
+  }
+
+  .events-media.is-max {
+    width: 636px;
+  }
+
+  .events-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #000;
+    object-fit: cover;
+  }
+
+  .events-caption {
+    max-width: 32ch;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
   .event-list-link {
     color: inherit;
     text-decoration: none;
@@ -175,6 +303,32 @@ const headerDate = post.dateLabel || formatDateLabel(post.publishedAt);
 
   .event-list-link:hover,
   .event-list-link.is-active {
+    text-decoration: underline;
+  }
+
+  .post-tags {
+    clear: both;
+    margin-top: 18px;
+  }
+
+  .post-tags .tagsText {
+    display: inline-block;
+    margin-top: 0;
+    padding: 8px 10px;
+    border: 1px solid #000;
+    background: #fff;
+  }
+
+  .tagsLinks {
+    display: block;
+  }
+
+  .tagLink {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .tagLink:hover {
     text-decoration: underline;
   }
 </style>
