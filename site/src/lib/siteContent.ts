@@ -331,7 +331,7 @@ function hasNewsRichTextBlock(parsedBlocks: NewsPost["newsBlocks"]): boolean {
   );
 }
 
-/** Strapi often stores prose on the post `body` field while media lives in eventBlocks/newsBlocks. */
+/** Strapi stores prose on the post `body` field; inline media uses the top-level `image` field. */
 function ensureTopLevelNewsBody(parsedBlocks: NewsPost["newsBlocks"], src: Record<string, unknown>) {
   const body = typeof src.body === "string" ? src.body.trim() : "";
   if (!body || hasNewsRichTextBlock(parsedBlocks)) return;
@@ -340,38 +340,6 @@ function ensureTopLevelNewsBody(parsedBlocks: NewsPost["newsBlocks"], src: Recor
     id: 0,
     body,
   });
-}
-
-function appendNewsBlocksFromEventBlocks(parsedBlocks: NewsPost["newsBlocks"], src: Record<string, unknown>, baseUrl: string) {
-  if (!Array.isArray(src.eventBlocks)) return;
-
-  for (const block of src.eventBlocks) {
-    if (!block || typeof block !== "object") continue;
-    const parsed = parseStrapiEntity(block);
-
-    if (parsed.__component === "events.rich-text") {
-      const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
-      if (!body) continue;
-      pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
-      continue;
-    }
-
-    if (parsed.__component === "events.media") {
-      const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.caption);
-      if (!image) continue;
-      const alreadyHasSameImage = parsedBlocks.some(
-        (existing) => existing.__component === "media" && existing.image?.url === image.src,
-      );
-      if (alreadyHasSameImage) continue;
-      pushNewsMediaBlock(parsedBlocks, image, {
-        id: parsed.id,
-        caption: parsed.caption,
-        imagePosition: parsed.imagePosition,
-        imageWidth: parsed.imageWidth,
-        imageParagraph: parsed.imageParagraph,
-      });
-    }
-  }
 }
 
 function resolvePostId(item: unknown, src: Record<string, unknown>, title: string): string {
@@ -535,40 +503,26 @@ function pickLatestTitlesByCategory(items: unknown[], limitByCategory: number): 
   return buckets;
 }
 
-function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPost["newsBlocks"] {
+function parseLegacyNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPost["newsBlocks"] {
   const parsedBlocks: NewsPost["newsBlocks"] = [];
+  if (!Array.isArray(src.newsBlocks)) return parsedBlocks;
 
-  if (Array.isArray(src.newsBlocks)) {
-    for (const block of src.newsBlocks) {
-      if (!block || typeof block !== "object") continue;
-      const parsed = parseStrapiEntity(block);
+  for (const block of src.newsBlocks) {
+    if (!block || typeof block !== "object") continue;
+    const parsed = parseStrapiEntity(block);
 
-      if (parsed.__component === "news.rich-text") {
-        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
-        if (!body) continue;
-        pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
-        continue;
-      }
+    if (parsed.__component === "news.rich-text") {
+      const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+      if (!body) continue;
+      pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
+      continue;
+    }
 
-      if (parsed.__component === "news.section") {
-        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
-        if (body) pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
-        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
-        if (image) {
-          pushNewsMediaBlock(parsedBlocks, image, {
-            id: parsed.id,
-            caption: parsed.caption,
-            imagePosition: parsed.imagePosition,
-            imageWidth: parsed.imageWidth,
-            imageParagraph: parsed.imageParagraph,
-          });
-        }
-        continue;
-      }
-
-      if (isNewsMediaComponent(parsed.__component)) {
-        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
-        if (!image) continue;
+    if (parsed.__component === "news.section") {
+      const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+      if (body) pushNewsRichTextBlock(parsedBlocks, body, parsed.id);
+      const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+      if (image) {
         pushNewsMediaBlock(parsedBlocks, image, {
           id: parsed.id,
           caption: parsed.caption,
@@ -577,11 +531,45 @@ function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPos
           imageParagraph: parsed.imageParagraph,
         });
       }
+      continue;
+    }
+
+    if (isNewsMediaComponent(parsed.__component)) {
+      const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+      if (!image) continue;
+      pushNewsMediaBlock(parsedBlocks, image, {
+        id: parsed.id,
+        caption: parsed.caption,
+        imagePosition: parsed.imagePosition,
+        imageWidth: parsed.imageWidth,
+        imageParagraph: parsed.imageParagraph,
+      });
     }
   }
 
-  if (parsedBlocks.length === 0) {
-    appendNewsBlocksFromEventBlocks(parsedBlocks, src, baseUrl);
+  return parsedBlocks;
+}
+
+function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPost["newsBlocks"] {
+  const legacyBlocks = parseLegacyNewsBlocks(src, baseUrl);
+  if (legacyBlocks.length > 0) {
+    finalizeNewsBlocks(legacyBlocks, src, baseUrl);
+    return legacyBlocks;
+  }
+
+  const parsedBlocks: NewsPost["newsBlocks"] = [];
+
+  const body = typeof src.body === "string" ? src.body.trim() : "";
+  if (body) {
+    pushNewsRichTextBlock(parsedBlocks, body);
+  }
+
+  const topLevelImage = parseImageLike(src.image, baseUrl);
+  if (topLevelImage) {
+    pushNewsMediaBlock(parsedBlocks, topLevelImage, {
+      imagePosition: "left",
+      imageWidth: "medium",
+    });
   }
 
   if (parsedBlocks.length > 0) {
@@ -598,19 +586,6 @@ function parseNewsBlocks(src: Record<string, unknown>, baseUrl: string): NewsPos
         imageWidth: "medium",
       });
     }
-  } else {
-    const image = parseImageLike(src.image, baseUrl);
-    if (image) {
-      pushNewsMediaBlock(parsedBlocks, image, {
-        imagePosition: "left",
-        imageWidth: "medium",
-      });
-    }
-  }
-
-  const body = typeof src.body === "string" ? src.body.trim() : "";
-  if (body) {
-    pushNewsRichTextBlock(parsedBlocks, body);
   }
 
   finalizeNewsBlocks(parsedBlocks, src, baseUrl);
@@ -798,77 +773,83 @@ function finalizeEventBlocks(parsedBlocks: EventPost["eventBlocks"], src: Record
   parsedBlocks.push(...detailsBlocks, ...coalesced);
 }
 
-function parseEventBlocks(src: Record<string, unknown>, baseUrl: string): EventPost["eventBlocks"] {
+function parseLegacyEventBlocks(src: Record<string, unknown>, baseUrl: string): EventPost["eventBlocks"] {
   const blocks: EventPost["eventBlocks"] = [];
+  if (!Array.isArray(src.eventBlocks)) return blocks;
 
-  if (Array.isArray(src.eventBlocks)) {
-    for (const block of src.eventBlocks) {
-      if (!block || typeof block !== "object") continue;
-      const parsed = parseStrapiEntity(block);
+  for (const block of src.eventBlocks) {
+    if (!block || typeof block !== "object") continue;
+    const parsed = parseStrapiEntity(block);
 
-      if (parsed.__component === "events.details") {
-        blocks.push({
-          __component: "events.details",
-          id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
-          venue: typeof parsed.venue === "string" ? parsed.venue.trim() : undefined,
-          description: typeof parsed.description === "string" ? parsed.description.trim() : undefined,
-          dateLabel: typeof parsed.dateLabel === "string" ? parsed.dateLabel.trim() : undefined,
-        });
-        continue;
-      }
+    if (parsed.__component === "events.details") {
+      blocks.push({
+        __component: "events.details",
+        id: typeof parsed.id === "number" ? parsed.id : blocks.length + 1,
+        venue: typeof parsed.venue === "string" ? parsed.venue.trim() : undefined,
+        description: typeof parsed.description === "string" ? parsed.description.trim() : undefined,
+        dateLabel: typeof parsed.dateLabel === "string" ? parsed.dateLabel.trim() : undefined,
+      });
+      continue;
+    }
 
-      if (parsed.__component === "events.rich-text") {
-        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
-        if (!body) continue;
-        pushEventRichTextBlock(blocks, body, parsed.id);
-        continue;
-      }
+    if (parsed.__component === "events.rich-text") {
+      const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+      if (!body) continue;
+      pushEventRichTextBlock(blocks, body, parsed.id);
+      continue;
+    }
 
-      if (parsed.__component === "events.section") {
-        const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
-        if (body) pushEventRichTextBlock(blocks, body, parsed.id);
-        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
-        if (image) {
-          pushEventMediaBlock(blocks, image, {
-            id: parsed.id,
-            caption: parsed.caption,
-            imagePosition: parsed.imagePosition,
-            imageWidth: parsed.imageWidth,
-            imageParagraph: parsed.imageParagraph,
-          });
-        }
-        continue;
-      }
-
-      if (parsed.__component === "events.media") {
-        const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
-        if (!image) continue;
-        pushEventMediaBlock(blocks, image, {
-          id: parsed.id,
-          caption: parsed.caption,
-          imagePosition: parsed.imagePosition,
-          imageWidth: parsed.imageWidth,
-          imageParagraph: parsed.imageParagraph,
-        });
-      }
+    if (parsed.__component === "events.media") {
+      const image = parseImageSource(parsed.image, baseUrl, parsed.imageUrl, parsed.imageAlt ?? parsed.caption);
+      if (!image) continue;
+      pushEventMediaBlock(blocks, image, {
+        id: parsed.id,
+        caption: parsed.caption,
+        imagePosition: parsed.imagePosition,
+        imageWidth: parsed.imageWidth,
+        imageParagraph: parsed.imageParagraph,
+      });
     }
   }
 
+  return blocks;
+}
+
+function parseEventBlocks(src: Record<string, unknown>, baseUrl: string): EventPost["eventBlocks"] {
+  const legacyBlocks = parseLegacyEventBlocks(src, baseUrl);
+  if (legacyBlocks.length > 0) {
+    finalizeEventBlocks(legacyBlocks, src, baseUrl);
+    return legacyBlocks;
+  }
+
+  const blocks: EventPost["eventBlocks"] = [];
+  const details = parseStrapiEntity(src.eventDetails);
+
+  const venue = typeof details.venue === "string" ? details.venue.trim() : "";
+  const description = typeof details.description === "string" ? details.description.trim() : "";
+  const dateLabel = typeof details.dateLabel === "string" ? details.dateLabel.trim() : "";
+
+  if (venue || description || dateLabel) {
+    blocks.push({
+      __component: "events.details",
+      id: 1,
+      venue: venue || undefined,
+      description: description || undefined,
+      dateLabel: dateLabel || undefined,
+    });
+  }
+
+  const body = typeof src.body === "string" ? src.body.trim() : "";
+  if (body) {
+    pushEventRichTextBlock(blocks, body);
+  }
+
   if (blocks.length === 0) {
-    const body = typeof src.body === "string" ? src.body.trim() : "";
     blocks.push({
       __component: "events.details",
       id: 1,
       description: body || undefined,
     });
-
-    const fallbackImage = parseImageLike(src.image, baseUrl);
-    if (fallbackImage) {
-      pushEventMediaBlock(blocks, fallbackImage, {
-        imagePosition: "left",
-        imageWidth: "medium",
-      });
-    }
   }
 
   finalizeEventBlocks(blocks, src, baseUrl);
@@ -1289,7 +1270,7 @@ function normalizeStrapiPayload(json: any): Record<string, unknown> {
 async function fetchStrapiSiteContent(): Promise<SiteContent> {
   const baseUrl = STRAPI_URL.replace(/\/+$/, "");
   const siteContentEndpoint = `${baseUrl}/api/site-content?populate=aboutBackground`;
-  const postsQuery = [
+  const postsQueryBase = [
     "sort[0]=publishedOn:desc",
     "sort[1]=publishedAt:desc",
     "pagination[pageSize]=200",
@@ -1297,23 +1278,34 @@ async function fetchStrapiSiteContent(): Promise<SiteContent> {
     "populate[image][fields][1]=alternativeText",
     "populate[image][fields][2]=width",
     "populate[image][fields][3]=height",
-    "populate[newsBlocks][populate]=*",
-    "populate[eventBlocks][populate]=*",
     "populate[releaseDetails]=*",
     "populate[releaseLinks]=*",
+  ];
+  const postsQueryCurrent = [...postsQueryBase, "populate[eventDetails]=*"].join("&");
+  const postsQueryLegacy = [
+    ...postsQueryBase,
+    "populate[newsBlocks][populate]=*",
+    "populate[eventBlocks][populate]=*",
   ].join("&");
-  const postsEndpoint = `${baseUrl}/api/posts?${postsQuery}`;
 
-  const [siteContentResponse, postsResponse] = await Promise.all([
+  const fetchPosts = async (query: string) =>
+    fetch(`${baseUrl}/api/posts?${query}`, {
+      headers: STRAPI_FETCH_HEADERS,
+      cache: "no-store",
+    });
+
+  const [siteContentResponse, postsResponseCurrent] = await Promise.all([
     fetch(siteContentEndpoint, {
       headers: STRAPI_FETCH_HEADERS,
       cache: "no-store",
     }),
-    fetch(postsEndpoint, {
-      headers: STRAPI_FETCH_HEADERS,
-      cache: "no-store",
-    }),
+    fetchPosts(postsQueryCurrent),
   ]);
+
+  let postsResponse = postsResponseCurrent;
+  if (!postsResponse.ok && postsResponse.status === 400) {
+    postsResponse = await fetchPosts(postsQueryLegacy);
+  }
 
   if (!siteContentResponse.ok) {
     throw new Error(`[15love] Strapi site-content returned ${siteContentResponse.status}`);
